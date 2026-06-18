@@ -1,0 +1,61 @@
+import { BarChart3 } from "lucide-react";
+import { signIn } from "@/lib/auth/config";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const check = params.check === "email";
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+      <div className="w-full max-w-md rounded-lg border bg-card p-8 shadow-sm">
+        <div className="mb-6 flex items-center gap-2">
+          <BarChart3 className="h-6 w-6 text-primary" />
+          <h1 className="text-xl font-semibold">Marketing Dashboard</h1>
+        </div>
+
+        {check ? (
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            Check your inbox for a sign-in link.
+          </div>
+        ) : (
+          <>
+            <p className="mb-6 text-sm text-muted-foreground">
+              Sign in with your email — we&apos;ll send you a magic link.
+            </p>
+            <form
+              action={async (formData: FormData) => {
+                "use server";
+                await signIn("resend", {
+                  email: formData.get("email"),
+                  redirectTo: "/",
+                });
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="you@example.com"
+                />
+              </div>
+              <Button type="submit" className="w-full">
+                Send magic link
+              </Button>
+            </form>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
