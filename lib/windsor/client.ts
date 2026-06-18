@@ -1,7 +1,7 @@
 import { PROVIDERS } from "./providers";
 import type { Provider } from "@prisma/client";
 
-const BASE = process.env.WINDSOR_API_BASE ?? "https://api.windsor.ai";
+const BASE = (process.env.WINDSOR_API_BASE ?? "https://windsor.ai/api").replace(/\/+$/, "");
 
 export interface WindsorQuery {
   connector: string;
@@ -31,7 +31,8 @@ export class WindsorClient {
   }
 
   private url(path: string, params: Record<string, string | undefined> = {}) {
-    const url = new URL(path, BASE);
+    const normalized = path.startsWith("/") ? path : `/${path}`;
+    const url = new URL(`${BASE}${normalized}`);
     url.searchParams.set("api_key", this.apiKey);
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined) url.searchParams.set(k, v);
