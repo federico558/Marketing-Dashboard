@@ -2,6 +2,9 @@ import { PROVIDERS } from "./providers";
 import type { Provider } from "@prisma/client";
 
 const BASE = (process.env.WINDSOR_API_BASE ?? "https://windsor.ai/api").replace(/\/+$/, "");
+const ONBOARD_BASE = (
+  process.env.WINDSOR_ONBOARD_BASE ?? "https://onboard.windsor.ai"
+).replace(/\/+$/, "");
 
 export interface WindsorQuery {
   connector: string;
@@ -41,18 +44,12 @@ export class WindsorClient {
   }
 
   async getAuthorizationUrl(input: WindsorAuthRequest): Promise<string> {
-    const url = this.url("/oauth/url", {
-      connector: input.connector,
-      redirect_uri: input.redirect_uri,
-      state: input.state,
-    });
-    const res = await fetch(url, { method: "GET" });
-    if (!res.ok) {
-      throw new Error(`Windsor getAuthorizationUrl failed: ${res.status}`);
-    }
-    const json = (await res.json()) as { url?: string };
-    if (!json.url) throw new Error("Windsor returned no auth URL");
-    return json.url;
+    const url = new URL(`${ONBOARD_BASE}/`);
+    url.searchParams.set("api_key", this.apiKey);
+    url.searchParams.set("data_source", input.connector);
+    url.searchParams.set("_redirect", input.redirect_uri);
+    url.searchParams.set("state", input.state);
+    return url.toString();
   }
 
   async getData(query: WindsorQuery): Promise<Array<Record<string, unknown>>> {
