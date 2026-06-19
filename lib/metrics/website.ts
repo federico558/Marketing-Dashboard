@@ -1,13 +1,9 @@
 import { withCache, cacheKey } from "@/lib/cache";
 import type { DateRange } from "@/lib/dates";
-import { rangeKey } from "@/lib/dates";
-import {
-  fetchWindsorRows,
-  safeRate,
-  sumBy,
-  toNumber,
-  toString,
-} from "./helpers";
+import { formatRangeISO, rangeKey } from "@/lib/dates";
+import { fetchGA4Rows } from "@/lib/google/ga4";
+import { fetchGSCRows } from "@/lib/google/searchConsole";
+import { avgBy, getConnection, safeRate, sumBy } from "./helpers";
 import type { TrendPoint, WebsiteMetrics } from "./types";
 
 export async function getWebsiteMetrics(
@@ -23,77 +19,63 @@ export async function getWebsiteMetrics(
     rangeKey(range),
   ]);
   return withCache(key, userId, async () => {
-    const [ga4Rows, gscRows] = await Promise.all([
-      fetchWindsorRows(userId, "GA4", range),
-      fetchWindsorRows(userId, "SEARCH_CONSOLE", range),
+    const { from, to } = formatRangeISO(range);
+    const [ga4Conn, gscConn] = await Promise.all([
+      getConnection(userId, "GA4"),
+      getConnection(userId, "SEARCH_CONSOLE"),
     ]);
+
+    const ga4Rows = ga4Conn?.status === "CONNECTED"
+      ? await fetchGA4Rows(ga4Conn, from, to).catch((e) => {
+          console.error("[metrics] GA4 fetch failed", e);
+          return null;
+        })
+      : null;
+    const gscRows = gscConn?.status === "CONNECTED"
+      ? await fetchGSCRows(gscConn, from, to).catch((e) => {
+          console.error("[metrics] GSC fetch failed", e);
+          return null;
+        })
+      : null;
 
     const ga4Connected = ga4Rows !== null;
     const gscConnected = gscRows !== null;
 
-    const ga4Sessions = sumBy(ga4Rows ?? [], (r) => toNumber(r.sessions));
-    const ga4Users = sumBy(ga4Rows ?? [], (r) => toNumber(r.totalUsers));
-    const ga4Pageviews = sumBy(ga4Rows ?? [], (r) =>
-      toNumber(r.screenPageViews),
-    );
-    const ga4Duration = (ga4Rows ?? []).length
-      ? sumBy(ga4Rows ?? [], (r) => toNumber(r.averageSessionDuration)) /
-        (ga4Rows ?? []).length
-      : 0;
-    const ga4Bounce = (ga4Rows ?? []).length
-      ? sumBy(ga4Rows ?? [], (r) => toNumber(r.bounceRate)) /
-        (ga4Rows ?? []).length
-      : 0;
-    const ga4Engagement = (ga4Rows ?? []).length
-      ? sumBy(ga4Rows ?? [], (r) => toNumber(r.engagementRate)) /
-        (ga4Rows ?? []).length
-      : 0;
+    const ga4 = {
+      sessions: sumBy(ga4Rows ?? [], (r) => r.sessions),
+      users: sumBy(ga4Rows ?? [], (r) => r.users),
+      pageviews: sumBy(ga4Rows ?? [], (r) => r.pageviews),
+      avgSessionDuration: avgBy(ga4Rows ?? [], (r) => r.avgSessionDuration),
+      bounceRate: avgBy(ga4Rows ?? [], (r) => r.bounceRate),
+      engagementRate: avgBy(ga4Rows ?? [], (r) => r.engagementRate),
+      connected: ga4Connected,
+    };
 
-    const gscImpr = sumBy(gscRows ?? [], (r) => toNumber(r.impressions));
-    const gscClicks = sumBy(gscRows ?? [], (r) => toNumber(r.clicks));
-    const gscCtr = safeRate(gscClicks, gscImpr);
-    const gscPosition = (gscRows ?? []).length
-      ? sumBy(gscRows ?? [], (r) => toNumber(r.position)) /
-        (gscRows ?? []).length
-      : 0;
+    const gscImpr = sumBy(gscRows ?? [], (r) => r.impressions);
+    const gscClicks = sumBy(gscRows ?? [], (r) => r.clicks);
+    const searchConsole = {
+      impressions: gscImpr,
+      clicks: gscClicks,
+      ctr: safeRate(gscClicks, gscImpr),
+      avgPosition: avgBy(gscRows ?? [], (r) => r.position),
+      connected: gscConnected,
+    };
 
     const trendMap = new Map<string, TrendPoint>();
     for (const r of ga4Rows ?? []) {
-      const d = toString(r.date);
-      if (!d) continue;
-      const cur = trendMap.get(d) ?? { date: d, sessions: 0, clicks: 0 };
-      cur.sessions = (cur.sessions as number) + toNumber(r.sessions);
-      trendMap.set(d, cur);
+      const cur = trendMap.get(r.date) ?? { date: r.date, sessions: 0, clicks: 0 };
+      cur.sessions = (cur.sessions as number) + r.sessions;
+      trendMap.set(r.date, cur);
     }
     for (const r of gscRows ?? []) {
-      const d = toString(r.date);
-      if (!d) continue;
-      const cur = trendMap.get(d) ?? { date: d, sessions: 0, clicks: 0 };
-      cur.clicks = (cur.clicks as number) + toNumber(r.clicks);
-      trendMap.set(d, cur);
+      const cur = trendMap.get(r.date) ?? { date: r.date, sessions: 0, clicks: 0 };
+      cur.clicks = (cur.clicks as number) + r.clicks;
+      trendMap.set(r.date, cur);
     }
     const trend = Array.from(trendMap.values()).sort((a, b) =>
       (a.date as string).localeCompare(b.date as string),
     );
 
-    return {
-      ga4: {
-        sessions: ga4Sessions,
-        users: ga4Users,
-        pageviews: ga4Pageviews,
-        avgSessionDuration: ga4Duration,
-        bounceRate: ga4Bounce,
-        engagementRate: ga4Engagement,
-        connected: ga4Connected,
-      },
-      searchConsole: {
-        impressions: gscImpr,
-        clicks: gscClicks,
-        ctr: gscCtr,
-        avgPosition: gscPosition,
-        connected: gscConnected,
-      },
-      trend,
-    };
+    return { ga4, searchConsole, trend };
   });
 }

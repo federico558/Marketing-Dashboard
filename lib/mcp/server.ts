@@ -5,8 +5,6 @@ import { parseRange } from "@/lib/dates";
 import { getExecutiveSummary } from "@/lib/metrics/summary";
 import { getWebsiteMetrics } from "@/lib/metrics/website";
 import { getOutreachMetrics } from "@/lib/metrics/outreach";
-import { getCrmMetrics } from "@/lib/metrics/crm";
-import { getSocialMetrics } from "@/lib/metrics/social";
 
 const DateRangeSchema = {
   from: z.string().describe("Start date in YYYY-MM-DD"),
@@ -30,7 +28,7 @@ export function buildMcpServer(userId: string): McpServer {
 
   server.tool(
     "get_executive_summary",
-    "Full executive summary across website, outreach, CRM, and social.",
+    "Full executive summary across website and outreach.",
     DateRangeSchema,
     async (input) => {
       const range = rangeFromInput(input);
@@ -68,39 +66,6 @@ export function buildMcpServer(userId: string): McpServer {
       return {
         content: [{ type: "text", text: JSON.stringify({ source, ...slice }) }],
       };
-    },
-  );
-
-  server.tool(
-    "get_crm_stats",
-    "Pipedrive funnel — MQLs, SQLs, meetings, deals.",
-    DateRangeSchema,
-    async (input) => {
-      const result = await getCrmMetrics(userId, rangeFromInput(input));
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
-    },
-  );
-
-  server.tool(
-    "get_social_stats",
-    "LinkedIn + Instagram organic post performance. network = linkedin | instagram (omit for both).",
-    {
-      ...DateRangeSchema,
-      network: z.enum(["linkedin", "instagram"]).optional(),
-    },
-    async (input) => {
-      const result = await getSocialMetrics(userId, rangeFromInput(input));
-      if (input.network === "linkedin") {
-        return {
-          content: [{ type: "text", text: JSON.stringify(result.linkedin) }],
-        };
-      }
-      if (input.network === "instagram") {
-        return {
-          content: [{ type: "text", text: JSON.stringify(result.instagram) }],
-        };
-      }
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
     },
   );
 
