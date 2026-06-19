@@ -28,9 +28,9 @@ export function BreakdownTable({ title, metricLabel, rows, emptyHint }: Props) {
           {rows.map((r) => (
             <li
               key={r.label}
-              className="flex items-center justify-between px-3 py-2 text-sm"
+              className="flex items-center gap-2 px-3 py-2 text-sm"
             >
-              <span className="mr-2 truncate" title={r.label}>
+              <span className="min-w-0 flex-1 truncate" title={r.label}>
                 {r.label}
               </span>
               <span className="flex shrink-0 items-center gap-2 font-mono text-xs">

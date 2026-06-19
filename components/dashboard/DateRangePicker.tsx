@@ -76,19 +76,19 @@ export function DateRangePicker() {
           </Button>
         ))}
       </div>
-      <div className="flex items-center gap-2 rounded-md border bg-card p-1 pl-2">
+      <div className="flex w-full flex-wrap items-center gap-2 rounded-md border bg-card p-1 pl-2 sm:w-auto">
         <Input
           type="date"
           value={from}
           onChange={(e) => setFrom(e.target.value)}
-          className="h-8 w-[150px]"
+          className="h-8 min-w-0 flex-1 sm:w-[150px] sm:flex-none"
         />
         <span className="text-muted-foreground">→</span>
         <Input
           type="date"
           value={to}
           onChange={(e) => setTo(e.target.value)}
-          className="h-8 w-[150px]"
+          className="h-8 min-w-0 flex-1 sm:w-[150px] sm:flex-none"
         />
         <Button
           size="sm"
