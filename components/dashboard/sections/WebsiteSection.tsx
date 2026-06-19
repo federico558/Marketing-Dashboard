@@ -15,21 +15,41 @@ export function WebsiteSection({ data }: { data: WebsiteMetrics }) {
     >
       <div className="space-y-6">
         <div>
-          <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-            Google Analytics 4
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-xs font-medium uppercase text-muted-foreground">
+              Google Analytics 4
+            </span>
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              vs previous period
+            </span>
           </div>
           {data.ga4.connected ? (
             <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-              <KpiCard label="Sessions" value={formatNumber(data.ga4.sessions)} />
-              <KpiCard label="Users" value={formatNumber(data.ga4.users)} />
-              <KpiCard label="Pageviews" value={formatNumber(data.ga4.pageviews)} />
+              <KpiCard
+                label="Sessions"
+                value={formatNumber(data.ga4.sessions)}
+                change={data.ga4.sessionsChange}
+              />
+              <KpiCard
+                label="Users"
+                value={formatNumber(data.ga4.users)}
+                change={data.ga4.usersChange}
+              />
+              <KpiCard
+                label="Pageviews"
+                value={formatNumber(data.ga4.pageviews)}
+                change={data.ga4.pageviewsChange}
+              />
               <KpiCard
                 label="Avg session"
                 value={formatDuration(data.ga4.avgSessionDuration)}
+                change={data.ga4.avgSessionDurationChange}
               />
               <KpiCard
                 label="Bounce rate"
                 value={formatPercent(data.ga4.bounceRate)}
+                change={data.ga4.bounceRateChange}
+                invertChangeColor
               />
             </div>
           ) : (
@@ -38,26 +58,36 @@ export function WebsiteSection({ data }: { data: WebsiteMetrics }) {
         </div>
 
         <div>
-          <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-            Search Console
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-xs font-medium uppercase text-muted-foreground">
+              Search Console
+            </span>
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              vs previous period
+            </span>
           </div>
           {data.searchConsole.connected ? (
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <KpiCard
                 label="Impressions"
                 value={formatNumber(data.searchConsole.impressions)}
+                change={data.searchConsole.impressionsChange}
               />
               <KpiCard
                 label="Clicks"
                 value={formatNumber(data.searchConsole.clicks)}
+                change={data.searchConsole.clicksChange}
               />
               <KpiCard
                 label="CTR"
                 value={formatPercent(data.searchConsole.ctr)}
+                change={data.searchConsole.ctrChange}
               />
               <KpiCard
                 label="Avg position"
                 value={data.searchConsole.avgPosition.toFixed(1)}
+                change={data.searchConsole.avgPositionChange}
+                invertChangeColor
               />
             </div>
           ) : (
