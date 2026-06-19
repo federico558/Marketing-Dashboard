@@ -17,28 +17,6 @@ export async function verifyPipedriveKey(apiKey: string): Promise<void> {
   }
 }
 
-interface TimelinePeriod {
-  period_start: string;
-  period_end: string;
-  totals?: {
-    count?: number;
-    values?: Record<string, number>;
-    weighted_values?: Record<string, number>;
-  };
-  deals?: Array<{ value?: number; currency?: string }>;
-}
-
-interface TimelineResponse {
-  success?: boolean;
-  data?: {
-    totals?: {
-      count?: number;
-      values?: Record<string, number>;
-    };
-    deals?: TimelinePeriod[];
-  };
-}
-
 export interface PipedriveDayRow {
   date: string;
   count: number;
@@ -76,17 +54,27 @@ async function fetchTimeline(
   if (!res.ok) {
     throw new Error(`Pipedrive timeline (${fieldKey}) failed: ${res.status}`);
   }
-  const json = (await res.json()) as TimelineResponse;
-  const rows: PipedriveDayRow[] = (json.data?.deals ?? []).map((p) => ({
-    date: (p.period_start ?? "").slice(0, 10),
-    count: Number(p.totals?.count ?? 0),
-    value: pickValue(p.totals?.values),
-  }));
-  return {
-    rows,
-    totalCount: Number(json.data?.totals?.count ?? 0),
-    totalValue: pickValue(json.data?.totals?.values),
+  const json = (await res.json()) as {
+    data?: Array<{
+      period_start?: string;
+      totals?: { count?: number };
+      totals_converted?: { value?: number };
+    }>;
   };
+  const periods = json.data ?? [];
+  const rows: PipedriveDayRow[] = [];
+  let totalCount = 0;
+  let totalValue = 0;
+  for (const p of periods) {
+    const count = Number(p.totals?.count ?? 0);
+    const value = Number(p.totals_converted?.value ?? 0);
+    totalCount += count;
+    totalValue += value;
+    if (p.period_start) {
+      rows.push({ date: p.period_start.slice(0, 10), count, value });
+    }
+  }
+  return { rows, totalCount, totalValue };
 }
 
 export interface PipedriveStage {
