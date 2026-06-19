@@ -63,7 +63,6 @@ async function fetchTimeline(
   fieldKey: "add_time" | "won_time" | "lost_time",
   from: string,
   to: string,
-  extra: Record<string, string> = {},
 ): Promise<{ rows: PipedriveDayRow[]; totalCount: number; totalValue: number }> {
   const res = await fetch(
     url("/deals/timeline", apiKey, {
@@ -72,7 +71,6 @@ async function fetchTimeline(
       amount: String(dayCount(from, to)),
       field_key: fieldKey,
       totals_convert_currency: "default_currency",
-      ...extra,
     }),
   );
   if (!res.ok) {
@@ -114,33 +112,130 @@ function findStage(stages: PipedriveStage[], patterns: RegExp[]): PipedriveStage
   return null;
 }
 
-function downstreamStages(
-  stages: PipedriveStage[],
-  target: PipedriveStage,
-): PipedriveStage[] {
-  return stages.filter(
-    (s) => s.pipeline_id === target.pipeline_id && s.order_nr >= target.order_nr,
-  );
+function parsePipedriveDate(s: string): number {
+  return new Date(s.replace(" ", "T") + "Z").getTime();
 }
 
-async function countDealsCreatedAtStages(
+const MAX_DEALS_TO_INSPECT = 500;
+const FLOW_CONCURRENCY = 10;
+
+async function listDealsUpdatedSince(
   apiKey: string,
-  stageIds: number[],
+  since: string,
+): Promise<number[]> {
+  const sinceMs = new Date(`${since}T00:00:00Z`).getTime();
+  const ids: number[] = [];
+  let start = 0;
+  const limit = 100;
+
+  while (ids.length < MAX_DEALS_TO_INSPECT) {
+    const res = await fetch(
+      url("/deals", apiKey, {
+        start: String(start),
+        limit: String(limit),
+        sort: "update_time DESC",
+        status: "all_not_deleted",
+      }),
+    );
+    if (!res.ok) throw new Error(`Pipedrive deals list failed: ${res.status}`);
+    const json = (await res.json()) as {
+      data?: Array<{ id: number; update_time?: string }>;
+      additional_data?: { pagination?: { more_items_in_collection?: boolean } };
+    };
+    const data = json.data ?? [];
+    if (data.length === 0) break;
+
+    let foundOlder = false;
+    for (const d of data) {
+      if (!d.update_time) continue;
+      const updMs = parsePipedriveDate(d.update_time);
+      if (updMs >= sinceMs) {
+        ids.push(d.id);
+      } else {
+        foundOlder = true;
+      }
+    }
+
+    if (foundOlder) break;
+    if (!json.additional_data?.pagination?.more_items_in_collection) break;
+    if (data.length < limit) break;
+    start += limit;
+  }
+
+  return ids;
+}
+
+interface FlowEvent {
+  object: string;
+  data: {
+    field_key?: string;
+    old_value?: string | number | null;
+    new_value?: string | number | null;
+    log_time?: string;
+  };
+}
+
+async function fetchDealFlow(
+  apiKey: string,
+  dealId: number,
+): Promise<FlowEvent[]> {
+  const res = await fetch(
+    url(`/deals/${dealId}/flow`, apiKey, { all_changes: "1" }),
+  );
+  if (!res.ok) {
+    if (res.status === 404) return [];
+    throw new Error(`Pipedrive flow ${dealId} failed: ${res.status}`);
+  }
+  const json = (await res.json()) as { data?: FlowEvent[] };
+  return json.data ?? [];
+}
+
+async function countStageTransitionsInRange(
+  apiKey: string,
+  mqlStageId: number | null,
+  sqlStageId: number | null,
   from: string,
   to: string,
-): Promise<number> {
-  if (stageIds.length === 0) return 0;
-  const counts = await Promise.all(
-    stageIds.map((id) =>
-      fetchTimeline(apiKey, "add_time", from, to, { stage_id: String(id) })
-        .then((r) => r.totalCount)
-        .catch((e) => {
-          console.error(`[pipedrive] count for stage ${id} failed`, e);
-          return 0;
+): Promise<{ mqls: number; sqls: number; inspectedDeals: number }> {
+  if (mqlStageId == null && sqlStageId == null) {
+    return { mqls: 0, sqls: 0, inspectedDeals: 0 };
+  }
+
+  const dealIds = await listDealsUpdatedSince(apiKey, from);
+  const fromMs = new Date(`${from}T00:00:00Z`).getTime();
+  const toMs = new Date(`${to}T00:00:00Z`).getTime() + 86_400_000 - 1;
+
+  const mqlDeals = new Set<number>();
+  const sqlDeals = new Set<number>();
+
+  for (let i = 0; i < dealIds.length; i += FLOW_CONCURRENCY) {
+    const chunk = dealIds.slice(i, i + FLOW_CONCURRENCY);
+    const flows = await Promise.all(
+      chunk.map((id) =>
+        fetchDealFlow(apiKey, id).catch((e) => {
+          console.error(`[pipedrive] flow ${id} failed`, e);
+          return [] as FlowEvent[];
         }),
-    ),
-  );
-  return counts.reduce((a, b) => a + b, 0);
+      ),
+    );
+
+    chunk.forEach((dealId, idx) => {
+      const events = flows[idx];
+      for (const event of events) {
+        if (event.object !== "dealChange") continue;
+        if (event.data.field_key !== "stage_id") continue;
+        const logTime = event.data.log_time;
+        if (!logTime) continue;
+        const logMs = parsePipedriveDate(logTime);
+        if (logMs < fromMs || logMs > toMs) continue;
+        const newStageId = Number(event.data.new_value);
+        if (mqlStageId != null && newStageId === mqlStageId) mqlDeals.add(dealId);
+        if (sqlStageId != null && newStageId === sqlStageId) sqlDeals.add(dealId);
+      }
+    });
+  }
+
+  return { mqls: mqlDeals.size, sqls: sqlDeals.size, inspectedDeals: dealIds.length };
 }
 
 export interface QualifiedLeadsCounts {
@@ -148,6 +243,8 @@ export interface QualifiedLeadsCounts {
   sqls: number;
   mqlStageName: string | null;
   sqlStageName: string | null;
+  inspectedDeals: number;
+  capped: boolean;
 }
 
 const MQL_PATTERNS = [/\bmql\b/i, /marketing[\s_-]*qualified/i];
@@ -162,30 +259,21 @@ async function fetchQualifiedLeads(
   const mqlStage = findStage(stages, MQL_PATTERNS);
   const sqlStage = findStage(stages, SQL_PATTERNS);
 
-  const [mqls, sqls] = await Promise.all([
-    mqlStage
-      ? countDealsCreatedAtStages(
-          apiKey,
-          downstreamStages(stages, mqlStage).map((s) => s.id),
-          from,
-          to,
-        )
-      : Promise.resolve(0),
-    sqlStage
-      ? countDealsCreatedAtStages(
-          apiKey,
-          downstreamStages(stages, sqlStage).map((s) => s.id),
-          from,
-          to,
-        )
-      : Promise.resolve(0),
-  ]);
+  const { mqls, sqls, inspectedDeals } = await countStageTransitionsInRange(
+    apiKey,
+    mqlStage?.id ?? null,
+    sqlStage?.id ?? null,
+    from,
+    to,
+  );
 
   return {
     mqls,
     sqls,
     mqlStageName: mqlStage?.name ?? null,
     sqlStageName: sqlStage?.name ?? null,
+    inspectedDeals,
+    capped: inspectedDeals >= MAX_DEALS_TO_INSPECT,
   };
 }
 
