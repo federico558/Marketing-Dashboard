@@ -5,7 +5,7 @@ import { isProvider } from "@/lib/providers";
 import { encrypt } from "@/lib/crypto";
 import { verifyLemlistKey } from "@/lib/lemlist/client";
 import { verifySmartleadKey } from "@/lib/smartlead/client";
-import { invalidateUserProvider } from "@/lib/cache";
+import { invalidateUserMetrics } from "@/lib/cache";
 
 export async function POST(
   req: Request,
@@ -53,7 +53,7 @@ export async function POST(
         meta: undefined,
       },
     });
-    await invalidateUserProvider(session.user.id, provider);
+    await invalidateUserMetrics(session.user.id);
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[connections/key] save failed", e);

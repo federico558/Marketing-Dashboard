@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { prisma } from "@/lib/db";
 import { isProvider } from "@/lib/providers";
-import { invalidateUserProvider } from "@/lib/cache";
+import { invalidateUserMetrics } from "@/lib/cache";
 
 export async function DELETE(
   _req: Request,
@@ -20,6 +20,6 @@ export async function DELETE(
   await prisma.connection.deleteMany({
     where: { userId: session.user.id, provider },
   });
-  await invalidateUserProvider(session.user.id, provider);
+  await invalidateUserMetrics(session.user.id);
   return NextResponse.json({ ok: true });
 }
