@@ -5,6 +5,7 @@ import { isProvider } from "@/lib/providers";
 import { encrypt } from "@/lib/crypto";
 import { verifyLemlistKey } from "@/lib/lemlist/client";
 import { verifySmartleadKey } from "@/lib/smartlead/client";
+import { verifyPipedriveKey } from "@/lib/pipedrive/client";
 import { invalidateUserMetrics } from "@/lib/cache";
 
 export async function POST(
@@ -17,7 +18,10 @@ export async function POST(
   }
   const { provider: raw } = await params;
   const provider = raw.toUpperCase();
-  if (!isProvider(provider) || (provider !== "LEMLIST" && provider !== "SMARTLEAD")) {
+  if (
+    !isProvider(provider) ||
+    (provider !== "LEMLIST" && provider !== "SMARTLEAD" && provider !== "PIPEDRIVE")
+  ) {
     return NextResponse.json({ error: "unsupported provider" }, { status: 400 });
   }
 
@@ -29,7 +33,8 @@ export async function POST(
 
   try {
     if (provider === "LEMLIST") await verifyLemlistKey(apiKey);
-    else await verifySmartleadKey(apiKey);
+    else if (provider === "SMARTLEAD") await verifySmartleadKey(apiKey);
+    else await verifyPipedriveKey(apiKey);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "invalid key" },

@@ -5,6 +5,7 @@ import { getExecutiveSummary } from "@/lib/metrics/summary";
 import { DateRangePicker } from "@/components/dashboard/DateRangePicker";
 import { WebsiteSection } from "@/components/dashboard/sections/WebsiteSection";
 import { OutreachSection } from "@/components/dashboard/sections/OutreachSection";
+import { CrmSection } from "@/components/dashboard/sections/CrmSection";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export default async function DashboardPage({
       <div className="grid gap-6">
         <WebsiteSection data={summary.website} />
         <OutreachSection data={summary.outreach} />
+        <CrmSection data={summary.crm} />
       </div>
     </div>
   );
