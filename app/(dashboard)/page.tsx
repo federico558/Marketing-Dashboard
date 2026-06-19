@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { parseRange } from "@/lib/dates";
 import { getExecutiveSummary } from "@/lib/metrics/summary";
 import { DateRangePicker } from "@/components/dashboard/DateRangePicker";
+import { RefreshDataButton } from "@/components/dashboard/RefreshDataButton";
 import { WebsiteSection } from "@/components/dashboard/sections/WebsiteSection";
 import { OutreachSection } from "@/components/dashboard/sections/OutreachSection";
 import { CrmSection } from "@/components/dashboard/sections/CrmSection";
@@ -36,7 +37,10 @@ export default async function DashboardPage({
             Marketing performance across your connected sources.
           </p>
         </div>
-        <DateRangePicker />
+        <div className="flex flex-wrap items-center gap-2">
+          <DateRangePicker />
+          <RefreshDataButton />
+        </div>
       </header>
 
       <div className="grid gap-6">
