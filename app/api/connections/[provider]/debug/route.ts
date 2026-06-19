@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
 import { isProvider } from "@/lib/providers";
 import { smartleadDebug } from "@/lib/smartlead/client";
+import { pipedriveDebug } from "@/lib/pipedrive/client";
 import { parseRange, formatRangeISO } from "@/lib/dates";
 
 export async function GET(
@@ -38,6 +39,21 @@ export async function GET(
     }
     try {
       const result = await smartleadDebug(decrypt(conn.apiKeyEnc), from, to);
+      return NextResponse.json({ range: { from, to }, result });
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "debug failed" },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (provider === "PIPEDRIVE") {
+    if (!conn.apiKeyEnc) {
+      return NextResponse.json({ error: "missing key" }, { status: 400 });
+    }
+    try {
+      const result = await pipedriveDebug(decrypt(conn.apiKeyEnc), from, to);
       return NextResponse.json({ range: { from, to }, result });
     } catch (e) {
       return NextResponse.json(
