@@ -16,7 +16,40 @@ export function CrmSection({ data }: { data: CrmMetrics }) {
           <div>
             <div className="mb-2 flex items-baseline justify-between">
               <span className="text-xs font-medium uppercase text-muted-foreground">
-                Period
+                Pipeline qualification
+              </span>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                vs previous period
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <KpiCard
+                label={`MQLs${data.mqlStageName ? ` (${data.mqlStageName})` : ""}`}
+                value={formatNumber(data.mqls)}
+                change={data.mqlsChange}
+                hint={
+                  data.mqlStageName
+                    ? undefined
+                    : "No stage matched MQL — name a Pipedrive stage \"MQL\" or \"Marketing Qualified Lead\""
+                }
+              />
+              <KpiCard
+                label={`SQLs${data.sqlStageName ? ` (${data.sqlStageName})` : ""}`}
+                value={formatNumber(data.sqls)}
+                change={data.sqlsChange}
+                hint={
+                  data.sqlStageName
+                    ? undefined
+                    : "No stage matched SQL — name a Pipedrive stage \"SQL\" or \"Sales Qualified Lead\""
+                }
+              />
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="text-xs font-medium uppercase text-muted-foreground">
+                Deals
               </span>
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                 vs previous period

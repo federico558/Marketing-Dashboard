@@ -73,6 +73,12 @@ export interface CrmMetrics {
   winRateChange: number | null;
   openDeals: number;
   openDealsValue: number;
+  mqls: number;
+  mqlsChange: number | null;
+  mqlStageName: string | null;
+  sqls: number;
+  sqlsChange: number | null;
+  sqlStageName: string | null;
   trend: TrendPoint[];
   connected: boolean;
 }
