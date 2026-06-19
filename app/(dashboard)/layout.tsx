@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { auth, signOut } from "@/lib/auth/config";
 import { Button } from "@/components/ui/button";
+import { MobileNav } from "@/components/layout/MobileNav";
 
 export default async function DashboardLayout({
   children,
@@ -18,6 +19,11 @@ export default async function DashboardLayout({
   const session = await auth();
   if (!session?.user) {
     redirect("/sign-in");
+  }
+
+  async function handleSignOut() {
+    "use server";
+    await signOut({ redirectTo: "/sign-in" });
   }
 
   return (
@@ -45,12 +51,7 @@ export default async function DashboardLayout({
           <div className="px-2 py-2 text-xs text-muted-foreground">
             {session.user.email}
           </div>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/sign-in" });
-            }}
-          >
+          <form action={handleSignOut}>
             <Button
               type="submit"
               variant="ghost"
@@ -63,8 +64,16 @@ export default async function DashboardLayout({
           </form>
         </div>
       </aside>
-      <main className="flex-1 overflow-x-hidden">
-        <div className="mx-auto max-w-7xl px-4 py-6 md:px-8 md:py-8">
+      <main className="flex w-0 flex-1 flex-col overflow-x-hidden">
+        <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-card px-4 md:hidden">
+          <MobileNav email={session.user.email} signOutAction={handleSignOut} />
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            <span className="text-sm font-semibold">Marketing Dashboard</span>
+          </div>
+          <div className="w-9" aria-hidden />
+        </header>
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-8">
           {children}
         </div>
       </main>
