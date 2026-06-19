@@ -6,7 +6,7 @@ import { exchangeCode, getAppUrl } from "@/lib/google/oauth";
 import { listGA4Properties } from "@/lib/google/ga4";
 import { listGSCSites } from "@/lib/google/searchConsole";
 import { isProvider } from "@/lib/providers";
-import { invalidateUserProvider } from "@/lib/cache";
+import { invalidateUserMetrics } from "@/lib/cache";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -95,7 +95,7 @@ export async function GET(req: Request) {
         meta: undefined,
       },
     });
-    await invalidateUserProvider(userId, provider);
+    await invalidateUserMetrics(userId);
 
     return NextResponse.redirect(`${back}?connected=${provider.toLowerCase()}`);
   } catch (e) {

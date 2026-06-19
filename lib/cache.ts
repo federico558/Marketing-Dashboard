@@ -49,6 +49,14 @@ export async function invalidateUserProvider(userId: string, providerSlug: strin
   });
 }
 
+export async function invalidateUserMetrics(userId: string) {
+  const prefix = `user:${userId}:`;
+  for (const k of memory.keys()) {
+    if (k.startsWith(prefix)) memory.delete(k);
+  }
+  await prisma.cacheEntry.deleteMany({ where: { userId } });
+}
+
 export async function withCache<T>(
   key: string,
   userId: string,
