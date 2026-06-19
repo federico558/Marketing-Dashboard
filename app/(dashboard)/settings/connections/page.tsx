@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth/config";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { PROVIDER_LIST } from "@/lib/windsor/providers";
+import { PROVIDER_LIST } from "@/lib/providers";
 import { ConnectionCard } from "@/components/connections/ConnectionCard";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export default async function ConnectionsPage({
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Connections</h1>
         <p className="text-sm text-muted-foreground">
-          Connect your data sources via Windsor.ai to populate the dashboard.
+          Connect your data sources to populate the dashboard.
         </p>
       </header>
 
@@ -44,15 +44,20 @@ export default async function ConnectionsPage({
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
-        {PROVIDER_LIST.map((p) => (
-          <ConnectionCard
-            key={p.id}
-            provider={p.id}
-            label={p.label}
-            description={p.description}
-            status={byProvider.get(p.id)?.status ?? null}
-          />
-        ))}
+        {PROVIDER_LIST.map((p) => {
+          const row = byProvider.get(p.id);
+          return (
+            <ConnectionCard
+              key={p.id}
+              provider={p.id}
+              label={p.label}
+              description={p.description}
+              authMode={p.authMode}
+              status={row?.status ?? null}
+              externalLabel={row?.externalLabel ?? null}
+            />
+          );
+        })}
       </div>
     </div>
   );

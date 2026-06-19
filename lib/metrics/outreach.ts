@@ -1,14 +1,17 @@
 import { withCache, cacheKey } from "@/lib/cache";
 import type { DateRange } from "@/lib/dates";
-import { rangeKey } from "@/lib/dates";
-import {
-  fetchWindsorRows,
-  safeRate,
-  sumBy,
-  toNumber,
-  toString,
-} from "./helpers";
+import { formatRangeISO, rangeKey } from "@/lib/dates";
+import { fetchLemlistRows } from "@/lib/lemlist/client";
+import { fetchSmartleadRows } from "@/lib/smartlead/client";
+import { getConnection, safeRate, sumBy } from "./helpers";
 import type { OutreachMetrics, TrendPoint } from "./types";
+
+interface DayRow {
+  date: string;
+  sent: number;
+  opens: number;
+  replies: number;
+}
 
 interface ChannelTotals {
   sent: number;
@@ -27,6 +30,14 @@ function totalsToStats(t: ChannelTotals, connected: boolean) {
   };
 }
 
+function totals(rows: DayRow[]): ChannelTotals {
+  return {
+    sent: sumBy(rows, (r) => r.sent),
+    opens: sumBy(rows, (r) => r.opens),
+    replies: sumBy(rows, (r) => r.replies),
+  };
+}
+
 export async function getOutreachMetrics(
   userId: string,
   range: DateRange,
@@ -40,24 +51,29 @@ export async function getOutreachMetrics(
     rangeKey(range),
   ]);
   return withCache(key, userId, async () => {
-    const [lemlistRows, smartleadRows] = await Promise.all([
-      fetchWindsorRows(userId, "LEMLIST", range),
-      fetchWindsorRows(userId, "SMARTLEAD", range),
+    const { from, to } = formatRangeISO(range);
+    const [lemConn, slConn] = await Promise.all([
+      getConnection(userId, "LEMLIST"),
+      getConnection(userId, "SMARTLEAD"),
     ]);
 
-    const lemConnected = lemlistRows !== null;
-    const slConnected = smartleadRows !== null;
+    const lemRows = lemConn?.status === "CONNECTED"
+      ? await fetchLemlistRows(lemConn, from, to).catch((e) => {
+          console.error("[metrics] Lemlist fetch failed", e);
+          return null;
+        })
+      : null;
+    const slRows = slConn?.status === "CONNECTED"
+      ? await fetchSmartleadRows(slConn, from, to).catch((e) => {
+          console.error("[metrics] Smartlead fetch failed", e);
+          return null;
+        })
+      : null;
 
-    const lemTotals: ChannelTotals = {
-      sent: sumBy(lemlistRows ?? [], (r) => toNumber(r.emails_sent)),
-      opens: sumBy(lemlistRows ?? [], (r) => toNumber(r.emails_opened)),
-      replies: sumBy(lemlistRows ?? [], (r) => toNumber(r.emails_replied)),
-    };
-    const slTotals: ChannelTotals = {
-      sent: sumBy(smartleadRows ?? [], (r) => toNumber(r.sent_count)),
-      opens: sumBy(smartleadRows ?? [], (r) => toNumber(r.open_count)),
-      replies: sumBy(smartleadRows ?? [], (r) => toNumber(r.reply_count)),
-    };
+    const lemConnected = lemRows !== null;
+    const slConnected = slRows !== null;
+    const lemTotals = totals(lemRows ?? []);
+    const slTotals = totals(slRows ?? []);
     const combined: ChannelTotals = {
       sent: lemTotals.sent + slTotals.sent,
       opens: lemTotals.opens + slTotals.opens,
@@ -65,21 +81,17 @@ export async function getOutreachMetrics(
     };
 
     const trendMap = new Map<string, TrendPoint>();
-    for (const r of lemlistRows ?? []) {
-      const d = toString(r.date);
-      if (!d) continue;
-      const cur = trendMap.get(d) ?? { date: d, sent: 0, replies: 0 };
-      cur.sent = (cur.sent as number) + toNumber(r.emails_sent);
-      cur.replies = (cur.replies as number) + toNumber(r.emails_replied);
-      trendMap.set(d, cur);
+    for (const r of lemRows ?? []) {
+      const cur = trendMap.get(r.date) ?? { date: r.date, sent: 0, replies: 0 };
+      cur.sent = (cur.sent as number) + r.sent;
+      cur.replies = (cur.replies as number) + r.replies;
+      trendMap.set(r.date, cur);
     }
-    for (const r of smartleadRows ?? []) {
-      const d = toString(r.date);
-      if (!d) continue;
-      const cur = trendMap.get(d) ?? { date: d, sent: 0, replies: 0 };
-      cur.sent = (cur.sent as number) + toNumber(r.sent_count);
-      cur.replies = (cur.replies as number) + toNumber(r.reply_count);
-      trendMap.set(d, cur);
+    for (const r of slRows ?? []) {
+      const cur = trendMap.get(r.date) ?? { date: r.date, sent: 0, replies: 0 };
+      cur.sent = (cur.sent as number) + r.sent;
+      cur.replies = (cur.replies as number) + r.replies;
+      trendMap.set(r.date, cur);
     }
     const trend = Array.from(trendMap.values()).sort((a, b) =>
       (a.date as string).localeCompare(b.date as string),

@@ -1,9 +1,3 @@
-export interface MetricSection<T> {
-  connected: boolean;
-  data: T | null;
-  error?: string;
-}
-
 export interface TrendPoint {
   date: string;
   [key: string]: string | number;
@@ -45,42 +39,8 @@ export interface OutreachMetrics {
   trend: TrendPoint[];
 }
 
-export interface CrmMetrics {
-  mqls: number;
-  sqls: number;
-  meetings: number;
-  deals: number;
-  dealsValue: number;
-  connected: boolean;
-}
-
-export interface SocialPost {
-  network: "linkedin" | "instagram";
-  date: string;
-  text: string;
-  impressions: number;
-  engagement: number;
-  engagementRate: number;
-}
-
-export interface SocialChannelStats {
-  totalImpressions: number;
-  totalEngagement: number;
-  avgEngagementRate: number;
-  posts: SocialPost[];
-  connected: boolean;
-}
-
-export interface SocialMetrics {
-  linkedin: SocialChannelStats;
-  instagram: SocialChannelStats;
-  trend: TrendPoint[];
-}
-
 export interface ExecutiveSummary {
   website: WebsiteMetrics;
   outreach: OutreachMetrics;
-  crm: CrmMetrics;
-  social: SocialMetrics;
   generatedAt: string;
 }

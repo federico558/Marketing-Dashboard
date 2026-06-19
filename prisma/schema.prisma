@@ -60,13 +60,10 @@ model VerificationToken {
 }
 
 enum Provider {
-  LINKEDIN
-  INSTAGRAM
-  LEMLIST
-  SMARTLEAD
-  PIPEDRIVE
   GA4
   SEARCH_CONSOLE
+  LEMLIST
+  SMARTLEAD
 }
 
 enum ConnectionStatus {
@@ -76,15 +73,20 @@ enum ConnectionStatus {
 }
 
 model Connection {
-  id                   String           @id @default(cuid())
-  userId               String
-  provider             Provider
-  windsorConnectorSlug String
-  windsorAccountId     String?
-  status               ConnectionStatus @default(PENDING)
-  meta                 Json?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  id              String           @id @default(cuid())
+  userId          String
+  provider        Provider
+  status          ConnectionStatus @default(PENDING)
+  accessTokenEnc  String?          @db.Text
+  refreshTokenEnc String?          @db.Text
+  tokenExpiresAt  DateTime?
+  scope           String?
+  externalId      String?
+  externalLabel   String?
+  apiKeyEnc       String?          @db.Text
+  meta            Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
