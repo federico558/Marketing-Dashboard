@@ -3,6 +3,12 @@ export interface TrendPoint {
   [key: string]: string | number;
 }
 
+export interface BreakdownRow {
+  label: string;
+  value: number;
+  changePercent: number | null;
+}
+
 export interface WebsiteMetrics {
   ga4: {
     sessions: number;
@@ -21,6 +27,11 @@ export interface WebsiteMetrics {
     connected: boolean;
   };
   trend: TrendPoint[];
+  breakdowns: {
+    byCountry: BreakdownRow[];
+    byPage: BreakdownRow[];
+    byChannel: BreakdownRow[];
+  };
 }
 
 export interface OutreachChannelStats {

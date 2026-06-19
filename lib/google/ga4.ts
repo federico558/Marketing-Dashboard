@@ -96,3 +96,79 @@ export async function fetchGA4Rows(
     };
   });
 }
+
+export interface GA4BreakdownRow {
+  label: string;
+  value: number;
+  changePercent: number | null;
+}
+
+async function runBreakdownReport(
+  conn: Connection,
+  token: string,
+  from: string,
+  to: string,
+  dimension: string,
+  metric: string,
+  limit: number,
+): Promise<Map<string, number>> {
+  const res = await fetch(
+    `https://analyticsdata.googleapis.com/v1beta/properties/${conn.externalId}:runReport`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        dateRanges: [{ startDate: from, endDate: to }],
+        dimensions: [{ name: dimension }],
+        metrics: [{ name: metric }],
+        orderBys: [{ metric: { metricName: metric }, desc: true }],
+        limit: String(limit),
+      }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(
+      `GA4 breakdown (${dimension}) failed: ${res.status} ${await res.text()}`,
+    );
+  }
+  const json = (await res.json()) as {
+    rows?: Array<{
+      dimensionValues: Array<{ value: string }>;
+      metricValues: Array<{ value: string }>;
+    }>;
+  };
+  const out = new Map<string, number>();
+  for (const r of json.rows ?? []) {
+    const label = r.dimensionValues[0]?.value ?? "(unknown)";
+    if (label === "(not set)") continue;
+    out.set(label, Number(r.metricValues[0]?.value ?? 0));
+  }
+  return out;
+}
+
+export async function fetchGA4Breakdown(
+  conn: Connection,
+  current: { from: string; to: string },
+  previous: { from: string; to: string },
+  dimension: string,
+  metric: string,
+  limit = 7,
+): Promise<GA4BreakdownRow[]> {
+  if (!conn.externalId) throw new Error("GA4 connection missing propertyId");
+  const token = await getValidAccessToken(conn);
+  const [curr, prev] = await Promise.all([
+    runBreakdownReport(conn, token, current.from, current.to, dimension, metric, limit),
+    runBreakdownReport(conn, token, previous.from, previous.to, dimension, metric, limit * 4),
+  ]);
+  return Array.from(curr.entries()).map(([label, value]) => {
+    const prevValue = prev.get(label);
+    let changePercent: number | null = null;
+    if (prevValue != null && prevValue > 0) {
+      changePercent = ((value - prevValue) / prevValue) * 100;
+    }
+    return { label, value, changePercent };
+  });
+}

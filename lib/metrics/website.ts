@@ -1,10 +1,16 @@
 import { withCache, cacheKey } from "@/lib/cache";
 import type { DateRange } from "@/lib/dates";
-import { formatRangeISO, rangeKey } from "@/lib/dates";
-import { fetchGA4Rows } from "@/lib/google/ga4";
+import { formatRangeISO, previousRange, rangeKey } from "@/lib/dates";
+import { fetchGA4Breakdown, fetchGA4Rows } from "@/lib/google/ga4";
 import { fetchGSCRows } from "@/lib/google/searchConsole";
 import { avgBy, getConnection, safeRate, sumBy } from "./helpers";
-import type { TrendPoint, WebsiteMetrics } from "./types";
+import type { BreakdownRow, TrendPoint, WebsiteMetrics } from "./types";
+
+const EMPTY_BREAKDOWNS: WebsiteMetrics["breakdowns"] = {
+  byCountry: [],
+  byPage: [],
+  byChannel: [],
+};
 
 export async function getWebsiteMetrics(
   userId: string,
@@ -19,24 +25,62 @@ export async function getWebsiteMetrics(
     rangeKey(range),
   ]);
   return withCache(key, userId, async () => {
-    const { from, to } = formatRangeISO(range);
+    const current = formatRangeISO(range);
+    const previous = formatRangeISO(previousRange(range));
     const [ga4Conn, gscConn] = await Promise.all([
       getConnection(userId, "GA4"),
       getConnection(userId, "SEARCH_CONSOLE"),
     ]);
 
-    const ga4Rows = ga4Conn?.status === "CONNECTED"
-      ? await fetchGA4Rows(ga4Conn, from, to).catch((e) => {
-          console.error("[metrics] GA4 fetch failed", e);
-          return null;
-        })
-      : null;
-    const gscRows = gscConn?.status === "CONNECTED"
-      ? await fetchGSCRows(gscConn, from, to).catch((e) => {
-          console.error("[metrics] GSC fetch failed", e);
-          return null;
-        })
-      : null;
+    const ga4Active = ga4Conn?.status === "CONNECTED";
+    const gscActive = gscConn?.status === "CONNECTED";
+
+    const [ga4Rows, gscRows, byCountry, byPage, byChannel] = await Promise.all([
+      ga4Active && ga4Conn
+        ? fetchGA4Rows(ga4Conn, current.from, current.to).catch((e) => {
+            console.error("[metrics] GA4 rows failed", e);
+            return null;
+          })
+        : Promise.resolve(null),
+      gscActive && gscConn
+        ? fetchGSCRows(gscConn, current.from, current.to).catch((e) => {
+            console.error("[metrics] GSC fetch failed", e);
+            return null;
+          })
+        : Promise.resolve(null),
+      ga4Active && ga4Conn
+        ? fetchGA4Breakdown(ga4Conn, current, previous, "country", "activeUsers").catch(
+            (e) => {
+              console.error("[metrics] GA4 by-country failed", e);
+              return [] as BreakdownRow[];
+            },
+          )
+        : Promise.resolve([] as BreakdownRow[]),
+      ga4Active && ga4Conn
+        ? fetchGA4Breakdown(
+            ga4Conn,
+            current,
+            previous,
+            "pageTitle",
+            "screenPageViews",
+          ).catch((e) => {
+            console.error("[metrics] GA4 by-page failed", e);
+            return [] as BreakdownRow[];
+          })
+        : Promise.resolve([] as BreakdownRow[]),
+      ga4Active && ga4Conn
+        ? fetchGA4Breakdown(
+            ga4Conn,
+            current,
+            previous,
+            "sessionDefaultChannelGroup",
+            "sessions",
+          ).catch((e) => {
+            console.error("[metrics] GA4 by-channel failed", e);
+            return [] as BreakdownRow[];
+          })
+        : Promise.resolve([] as BreakdownRow[]),
+    ]);
 
     const ga4Connected = ga4Rows !== null;
     const gscConnected = gscRows !== null;
@@ -76,6 +120,13 @@ export async function getWebsiteMetrics(
       (a.date as string).localeCompare(b.date as string),
     );
 
-    return { ga4, searchConsole, trend };
+    return {
+      ga4,
+      searchConsole,
+      trend,
+      breakdowns: ga4Connected
+        ? { byCountry, byPage, byChannel }
+        : EMPTY_BREAKDOWNS,
+    };
   });
 }
