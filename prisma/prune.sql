@@ -5,6 +5,6 @@ BEGIN
     WHERE schemaname = 'public' AND tablename = 'Connection'
   ) THEN
     DELETE FROM "Connection"
-    WHERE provider::text IN ('LINKEDIN', 'INSTAGRAM', 'PIPEDRIVE');
+    WHERE provider::text IN ('LINKEDIN', 'INSTAGRAM');
   END IF;
 END $$;
