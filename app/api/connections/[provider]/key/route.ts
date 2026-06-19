@@ -37,20 +37,29 @@ export async function POST(
     );
   }
 
-  await prisma.connection.upsert({
-    where: { userId_provider: { userId: session.user.id, provider } },
-    create: {
-      userId: session.user.id,
-      provider,
-      status: "CONNECTED",
-      apiKeyEnc: encrypt(apiKey),
-    },
-    update: {
-      status: "CONNECTED",
-      apiKeyEnc: encrypt(apiKey),
-      meta: undefined,
-    },
-  });
-  await invalidateUserProvider(session.user.id, provider);
-  return NextResponse.json({ ok: true });
+  try {
+    const enc = encrypt(apiKey);
+    await prisma.connection.upsert({
+      where: { userId_provider: { userId: session.user.id, provider } },
+      create: {
+        userId: session.user.id,
+        provider,
+        status: "CONNECTED",
+        apiKeyEnc: enc,
+      },
+      update: {
+        status: "CONNECTED",
+        apiKeyEnc: enc,
+        meta: undefined,
+      },
+    });
+    await invalidateUserProvider(session.user.id, provider);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("[connections/key] save failed", e);
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "save failed" },
+      { status: 500 },
+    );
+  }
 }
