@@ -60,8 +60,26 @@ export interface OutreachMetrics {
   trend: TrendPoint[];
 }
 
+export interface CrmMetrics {
+  dealsCreated: number;
+  dealsCreatedChange: number | null;
+  dealsWon: number;
+  dealsWonChange: number | null;
+  dealsWonValue: number;
+  dealsWonValueChange: number | null;
+  dealsLost: number;
+  dealsLostChange: number | null;
+  winRate: number;
+  winRateChange: number | null;
+  openDeals: number;
+  openDealsValue: number;
+  trend: TrendPoint[];
+  connected: boolean;
+}
+
 export interface ExecutiveSummary {
   website: WebsiteMetrics;
   outreach: OutreachMetrics;
+  crm: CrmMetrics;
   generatedAt: string;
 }

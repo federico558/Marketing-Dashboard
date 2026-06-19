@@ -34,6 +34,12 @@ export const PROVIDERS: Record<Provider, ProviderConfig> = {
     description: "Outbound emails sent, opens, replies and reply rate.",
     authMode: "api_key",
   },
+  PIPEDRIVE: {
+    id: "PIPEDRIVE",
+    label: "Pipedrive",
+    description: "Deals created, won, lost, win rate and open pipeline value.",
+    authMode: "api_key",
+  },
 };
 
 export const PROVIDER_LIST: ProviderConfig[] = [
@@ -41,6 +47,7 @@ export const PROVIDER_LIST: ProviderConfig[] = [
   PROVIDERS.SEARCH_CONSOLE,
   PROVIDERS.LEMLIST,
   PROVIDERS.SMARTLEAD,
+  PROVIDERS.PIPEDRIVE,
 ];
 
 export function isProvider(v: string): v is Provider {

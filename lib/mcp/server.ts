@@ -5,6 +5,7 @@ import { parseRange } from "@/lib/dates";
 import { getExecutiveSummary } from "@/lib/metrics/summary";
 import { getWebsiteMetrics } from "@/lib/metrics/website";
 import { getOutreachMetrics } from "@/lib/metrics/outreach";
+import { getCrmMetrics } from "@/lib/metrics/crm";
 
 const DateRangeSchema = {
   from: z.string().describe("Start date in YYYY-MM-DD"),
@@ -28,7 +29,7 @@ export function buildMcpServer(userId: string): McpServer {
 
   server.tool(
     "get_executive_summary",
-    "Full executive summary across website and outreach.",
+    "Full executive summary across website, outreach, and CRM.",
     DateRangeSchema,
     async (input) => {
       const range = rangeFromInput(input);
@@ -66,6 +67,16 @@ export function buildMcpServer(userId: string): McpServer {
       return {
         content: [{ type: "text", text: JSON.stringify({ source, ...slice }) }],
       };
+    },
+  );
+
+  server.tool(
+    "get_crm_stats",
+    "Pipedrive CRM — deals created, won, lost, win rate, won value, open pipeline.",
+    DateRangeSchema,
+    async (input) => {
+      const result = await getCrmMetrics(userId, rangeFromInput(input));
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
     },
   );
 

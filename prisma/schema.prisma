@@ -64,6 +64,7 @@ enum Provider {
   SEARCH_CONSOLE
   LEMLIST
   SMARTLEAD
+  PIPEDRIVE
 }
 
 enum ConnectionStatus {
