@@ -63,6 +63,7 @@ async function fetchTimeline(
   fieldKey: "add_time" | "won_time" | "lost_time",
   from: string,
   to: string,
+  extra: Record<string, string> = {},
 ): Promise<{ rows: PipedriveDayRow[]; totalCount: number; totalValue: number }> {
   const res = await fetch(
     url("/deals/timeline", apiKey, {
@@ -71,6 +72,7 @@ async function fetchTimeline(
       amount: String(dayCount(from, to)),
       field_key: fieldKey,
       totals_convert_currency: "default_currency",
+      ...extra,
     }),
   );
   if (!res.ok) {
@@ -86,6 +88,104 @@ async function fetchTimeline(
     rows,
     totalCount: Number(json.data?.totals?.count ?? 0),
     totalValue: pickValue(json.data?.totals?.values),
+  };
+}
+
+export interface PipedriveStage {
+  id: number;
+  name: string;
+  order_nr: number;
+  pipeline_id: number;
+  active_flag?: boolean;
+}
+
+async function listStages(apiKey: string): Promise<PipedriveStage[]> {
+  const res = await fetch(url("/stages", apiKey));
+  if (!res.ok) throw new Error(`Pipedrive stages failed: ${res.status}`);
+  const json = (await res.json()) as { data?: PipedriveStage[] };
+  return (json.data ?? []).filter((s) => s.active_flag !== false);
+}
+
+function findStage(stages: PipedriveStage[], patterns: RegExp[]): PipedriveStage | null {
+  for (const p of patterns) {
+    const hit = stages.find((s) => p.test(s.name));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function downstreamStages(
+  stages: PipedriveStage[],
+  target: PipedriveStage,
+): PipedriveStage[] {
+  return stages.filter(
+    (s) => s.pipeline_id === target.pipeline_id && s.order_nr >= target.order_nr,
+  );
+}
+
+async function countDealsCreatedAtStages(
+  apiKey: string,
+  stageIds: number[],
+  from: string,
+  to: string,
+): Promise<number> {
+  if (stageIds.length === 0) return 0;
+  const counts = await Promise.all(
+    stageIds.map((id) =>
+      fetchTimeline(apiKey, "add_time", from, to, { stage_id: String(id) })
+        .then((r) => r.totalCount)
+        .catch((e) => {
+          console.error(`[pipedrive] count for stage ${id} failed`, e);
+          return 0;
+        }),
+    ),
+  );
+  return counts.reduce((a, b) => a + b, 0);
+}
+
+export interface QualifiedLeadsCounts {
+  mqls: number;
+  sqls: number;
+  mqlStageName: string | null;
+  sqlStageName: string | null;
+}
+
+const MQL_PATTERNS = [/\bmql\b/i, /marketing[\s_-]*qualified/i];
+const SQL_PATTERNS = [/\bsql\b/i, /sales[\s_-]*qualified/i];
+
+async function fetchQualifiedLeads(
+  apiKey: string,
+  stages: PipedriveStage[],
+  from: string,
+  to: string,
+): Promise<QualifiedLeadsCounts> {
+  const mqlStage = findStage(stages, MQL_PATTERNS);
+  const sqlStage = findStage(stages, SQL_PATTERNS);
+
+  const [mqls, sqls] = await Promise.all([
+    mqlStage
+      ? countDealsCreatedAtStages(
+          apiKey,
+          downstreamStages(stages, mqlStage).map((s) => s.id),
+          from,
+          to,
+        )
+      : Promise.resolve(0),
+    sqlStage
+      ? countDealsCreatedAtStages(
+          apiKey,
+          downstreamStages(stages, sqlStage).map((s) => s.id),
+          from,
+          to,
+        )
+      : Promise.resolve(0),
+  ]);
+
+  return {
+    mqls,
+    sqls,
+    mqlStageName: mqlStage?.name ?? null,
+    sqlStageName: sqlStage?.name ?? null,
   };
 }
 
@@ -123,6 +223,7 @@ export interface PipedriveRange {
   won: { count: number; value: number; byDay: PipedriveDayRow[] };
   lost: { count: number; value: number; byDay: PipedriveDayRow[] };
   openSnapshot: PipedriveSnapshot;
+  qualified: QualifiedLeadsCounts;
 }
 
 export async function fetchPipedriveRange(
@@ -132,16 +233,22 @@ export async function fetchPipedriveRange(
 ): Promise<PipedriveRange> {
   if (!conn.apiKeyEnc) throw new Error("Pipedrive connection missing API key");
   const apiKey = decrypt(conn.apiKeyEnc);
-  const [created, won, lost, openSnapshot] = await Promise.all([
+  const stages = await listStages(apiKey).catch((e) => {
+    console.error("[pipedrive] listStages failed", e);
+    return [] as PipedriveStage[];
+  });
+  const [created, won, lost, openSnapshot, qualified] = await Promise.all([
     fetchTimeline(apiKey, "add_time", from, to),
     fetchTimeline(apiKey, "won_time", from, to),
     fetchTimeline(apiKey, "lost_time", from, to),
     fetchOpenDealsSnapshot(apiKey),
+    fetchQualifiedLeads(apiKey, stages, from, to),
   ]);
   return {
     created: { count: created.totalCount, value: created.totalValue, byDay: created.rows },
     won: { count: won.totalCount, value: won.totalValue, byDay: won.rows },
     lost: { count: lost.totalCount, value: lost.totalValue, byDay: lost.rows },
     openSnapshot,
+    qualified,
   };
 }
