@@ -31,6 +31,9 @@ function unwrapArray(json: unknown): unknown[] {
     if (Array.isArray(obj.data)) return obj.data;
     if (Array.isArray(obj.result)) return obj.result;
     if (Array.isArray(obj.rows)) return obj.rows;
+    if ("sent_count" in obj || "open_count" in obj || "reply_count" in obj) {
+      return [obj];
+    }
   }
   return [];
 }
@@ -44,12 +47,13 @@ function num(...candidates: unknown[]): number {
   return 0;
 }
 
-function pickDate(r: Record<string, unknown>): string {
+function pickDate(r: Record<string, unknown>, fallback: string): string {
   const raw =
     (r.date as string | undefined) ??
     (r.stats_date as string | undefined) ??
     (r.day as string | undefined) ??
-    "";
+    (r.end_date as string | undefined) ??
+    fallback;
   return raw.slice(0, 10);
 }
 
@@ -85,7 +89,7 @@ export async function fetchSmartleadCampaignAnalyticsByDate(
   for (const item of items) {
     if (!item || typeof item !== "object") continue;
     const r = item as Record<string, unknown>;
-    const date = pickDate(r);
+    const date = pickDate(r, to);
     if (!date) continue;
     rows.push({
       date,
