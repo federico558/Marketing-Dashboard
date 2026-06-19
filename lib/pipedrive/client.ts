@@ -167,6 +167,7 @@ async function listDealsUpdatedSince(
 
 interface FlowEvent {
   object: string;
+  timestamp?: string;
   data: {
     field_key?: string;
     old_value?: string | number | null;
@@ -179,15 +180,37 @@ async function fetchDealFlow(
   apiKey: string,
   dealId: number,
 ): Promise<FlowEvent[]> {
-  const res = await fetch(
-    url(`/deals/${dealId}/flow`, apiKey, { all_changes: "1" }),
-  );
-  if (!res.ok) {
-    if (res.status === 404) return [];
-    throw new Error(`Pipedrive flow ${dealId} failed: ${res.status}`);
+  const events: FlowEvent[] = [];
+  let start = 0;
+  const limit = 500;
+  while (true) {
+    const res = await fetch(
+      url(`/deals/${dealId}/flow`, apiKey, {
+        all_changes: "1",
+        items: "dealChange",
+        limit: String(limit),
+        start: String(start),
+      }),
+    );
+    if (!res.ok) {
+      if (res.status === 404) return events;
+      throw new Error(`Pipedrive flow ${dealId} failed: ${res.status}`);
+    }
+    const json = (await res.json()) as {
+      data?: FlowEvent[];
+      additional_data?: { pagination?: { more_items_in_collection?: boolean } };
+    };
+    const batch = json.data ?? [];
+    events.push(...batch);
+    if (!json.additional_data?.pagination?.more_items_in_collection) break;
+    if (batch.length < limit) break;
+    start += limit;
   }
-  const json = (await res.json()) as { data?: FlowEvent[] };
-  return json.data ?? [];
+  return events;
+}
+
+function eventTime(e: FlowEvent): string | undefined {
+  return e.data.log_time ?? e.timestamp;
 }
 
 async function countStageTransitionsInRange(
@@ -224,7 +247,7 @@ async function countStageTransitionsInRange(
       for (const event of events) {
         if (event.object !== "dealChange") continue;
         if (event.data.field_key !== "stage_id") continue;
-        const logTime = event.data.log_time;
+        const logTime = eventTime(event);
         if (!logTime) continue;
         const logMs = parsePipedriveDate(logTime);
         if (logMs < fromMs || logMs > toMs) continue;
@@ -312,6 +335,70 @@ export interface PipedriveRange {
   lost: { count: number; value: number; byDay: PipedriveDayRow[] };
   openSnapshot: PipedriveSnapshot;
   qualified: QualifiedLeadsCounts;
+}
+
+export async function pipedriveDebug(
+  apiKey: string,
+  from: string,
+  to: string,
+): Promise<unknown> {
+  const stages = await listStages(apiKey);
+  const mqlStage = findStage(stages, MQL_PATTERNS);
+  const sqlStage = findStage(stages, SQL_PATTERNS);
+  const dealIds = await listDealsUpdatedSince(apiKey, from);
+
+  const fromMs = new Date(`${from}T00:00:00Z`).getTime();
+  const toMs = new Date(`${to}T00:00:00Z`).getTime() + 86_400_000 - 1;
+
+  const sampleIds = dealIds.slice(0, 10);
+  const sampleFlows = await Promise.all(
+    sampleIds.map(async (id) => {
+      try {
+        const events = await fetchDealFlow(apiKey, id);
+        const stageChanges = events
+          .filter(
+            (e) => e.object === "dealChange" && e.data.field_key === "stage_id",
+          )
+          .map((e) => {
+            const lt = eventTime(e);
+            const logMs = lt ? parsePipedriveDate(lt) : NaN;
+            return {
+              log_time: lt,
+              parsedMs: logMs,
+              inRange: logMs >= fromMs && logMs <= toMs,
+              old_value: e.data.old_value,
+              new_value: e.data.new_value,
+              newStageMatchesMql: mqlStage
+                ? Number(e.data.new_value) === mqlStage.id
+                : false,
+              newStageMatchesSql: sqlStage
+                ? Number(e.data.new_value) === sqlStage.id
+                : false,
+            };
+          });
+        return { dealId: id, stageChanges };
+      } catch (e) {
+        return { dealId: id, error: e instanceof Error ? e.message : String(e) };
+      }
+    }),
+  );
+
+  return {
+    range: { from, to, fromMs, toMs },
+    stages: stages.map((s) => ({
+      id: s.id,
+      name: s.name,
+      pipeline_id: s.pipeline_id,
+      order_nr: s.order_nr,
+    })),
+    detected: {
+      mql: mqlStage ? { id: mqlStage.id, name: mqlStage.name } : null,
+      sql: sqlStage ? { id: sqlStage.id, name: sqlStage.name } : null,
+    },
+    candidateDealIds: dealIds,
+    candidateDealCount: dealIds.length,
+    sampleFlows,
+  };
 }
 
 export async function fetchPipedriveRange(
