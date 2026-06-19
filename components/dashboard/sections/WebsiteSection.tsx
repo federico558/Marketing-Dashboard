@@ -1,3 +1,4 @@
+import { BreakdownTable } from "@/components/dashboard/BreakdownTable";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { SectionCard } from "@/components/dashboard/SectionCard";
 import { TrendChart } from "@/components/dashboard/TrendChart";
@@ -76,6 +77,31 @@ export function WebsiteSection({ data }: { data: WebsiteMetrics }) {
                 { key: "clicks", label: "Search clicks", color: "#10b981" },
               ]}
             />
+          </div>
+        ) : null}
+
+        {data.ga4.connected ? (
+          <div>
+            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+              Breakdowns (vs previous period)
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <BreakdownTable
+                title="Users by country"
+                metricLabel="Active users"
+                rows={data.breakdowns.byCountry}
+              />
+              <BreakdownTable
+                title="Top pages"
+                metricLabel="Views"
+                rows={data.breakdowns.byPage}
+              />
+              <BreakdownTable
+                title="Sessions by channel"
+                metricLabel="Sessions"
+                rows={data.breakdowns.byChannel}
+              />
+            </div>
           </div>
         ) : null}
       </div>

@@ -57,3 +57,11 @@ export function rangeKey(range: DateRange) {
   const { from, to } = formatRangeISO(range);
   return `${from}_${to}`;
 }
+
+export function previousRange(range: DateRange): DateRange {
+  const DAY = 86_400_000;
+  const days = Math.round((range.to.getTime() - range.from.getTime()) / DAY) + 1;
+  const to = new Date(range.from.getTime() - DAY);
+  const from = new Date(to.getTime() - (days - 1) * DAY);
+  return { from, to, preset: "custom" };
+}
