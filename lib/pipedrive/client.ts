@@ -119,16 +119,22 @@ function parsePipedriveDate(s: string): number {
 const MAX_DEALS_TO_INSPECT = 500;
 const FLOW_CONCURRENCY = 10;
 
+interface DealSummary {
+  id: number;
+  add_time?: string;
+  stage_id?: number;
+}
+
 async function listDealsUpdatedSince(
   apiKey: string,
   since: string,
-): Promise<number[]> {
+): Promise<DealSummary[]> {
   const sinceMs = new Date(`${since}T00:00:00Z`).getTime();
-  const ids: number[] = [];
+  const deals: DealSummary[] = [];
   let start = 0;
   const limit = 100;
 
-  while (ids.length < MAX_DEALS_TO_INSPECT) {
+  while (deals.length < MAX_DEALS_TO_INSPECT) {
     const res = await fetch(
       url("/deals", apiKey, {
         start: String(start),
@@ -139,7 +145,12 @@ async function listDealsUpdatedSince(
     );
     if (!res.ok) throw new Error(`Pipedrive deals list failed: ${res.status}`);
     const json = (await res.json()) as {
-      data?: Array<{ id: number; update_time?: string }>;
+      data?: Array<{
+        id: number;
+        update_time?: string;
+        add_time?: string;
+        stage_id?: number;
+      }>;
       additional_data?: { pagination?: { more_items_in_collection?: boolean } };
     };
     const data = json.data ?? [];
@@ -150,7 +161,7 @@ async function listDealsUpdatedSince(
       if (!d.update_time) continue;
       const updMs = parsePipedriveDate(d.update_time);
       if (updMs >= sinceMs) {
-        ids.push(d.id);
+        deals.push({ id: d.id, add_time: d.add_time, stage_id: d.stage_id });
       } else {
         foundOlder = true;
       }
@@ -162,7 +173,7 @@ async function listDealsUpdatedSince(
     start += limit;
   }
 
-  return ids;
+  return deals;
 }
 
 interface FlowEvent {
@@ -213,6 +224,25 @@ function eventTime(e: FlowEvent): string | undefined {
   return e.data.log_time ?? e.timestamp;
 }
 
+function initialStageId(
+  deal: DealSummary,
+  stageChanges: FlowEvent[],
+): number | null {
+  if (stageChanges.length === 0) {
+    return deal.stage_id ?? null;
+  }
+  const sorted = [...stageChanges].sort((a, b) => {
+    const at = parsePipedriveDate(eventTime(a) ?? "1970-01-01 00:00:00");
+    const bt = parsePipedriveDate(eventTime(b) ?? "1970-01-01 00:00:00");
+    return at - bt;
+  });
+  const earliest = sorted[0];
+  const oldVal = earliest?.data.old_value;
+  if (oldVal == null) return deal.stage_id ?? null;
+  const n = Number(oldVal);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function countStageTransitionsInRange(
   apiKey: string,
   mqlStageId: number | null,
@@ -224,41 +254,54 @@ async function countStageTransitionsInRange(
     return { mqls: 0, sqls: 0, inspectedDeals: 0 };
   }
 
-  const dealIds = await listDealsUpdatedSince(apiKey, from);
+  const deals = await listDealsUpdatedSince(apiKey, from);
   const fromMs = new Date(`${from}T00:00:00Z`).getTime();
   const toMs = new Date(`${to}T00:00:00Z`).getTime() + 86_400_000 - 1;
 
   const mqlDeals = new Set<number>();
   const sqlDeals = new Set<number>();
 
-  for (let i = 0; i < dealIds.length; i += FLOW_CONCURRENCY) {
-    const chunk = dealIds.slice(i, i + FLOW_CONCURRENCY);
+  for (let i = 0; i < deals.length; i += FLOW_CONCURRENCY) {
+    const chunk = deals.slice(i, i + FLOW_CONCURRENCY);
     const flows = await Promise.all(
-      chunk.map((id) =>
-        fetchDealFlow(apiKey, id).catch((e) => {
-          console.error(`[pipedrive] flow ${id} failed`, e);
+      chunk.map((d) =>
+        fetchDealFlow(apiKey, d.id).catch((e) => {
+          console.error(`[pipedrive] flow ${d.id} failed`, e);
           return [] as FlowEvent[];
         }),
       ),
     );
 
-    chunk.forEach((dealId, idx) => {
+    chunk.forEach((deal, idx) => {
       const events = flows[idx];
-      for (const event of events) {
-        if (event.object !== "dealChange") continue;
-        if (event.data.field_key !== "stage_id") continue;
+      const stageChanges = events.filter(
+        (e) => e.object === "dealChange" && e.data.field_key === "stage_id",
+      );
+
+      for (const event of stageChanges) {
         const logTime = eventTime(event);
         if (!logTime) continue;
         const logMs = parsePipedriveDate(logTime);
         if (logMs < fromMs || logMs > toMs) continue;
         const newStageId = Number(event.data.new_value);
-        if (mqlStageId != null && newStageId === mqlStageId) mqlDeals.add(dealId);
-        if (sqlStageId != null && newStageId === sqlStageId) sqlDeals.add(dealId);
+        if (mqlStageId != null && newStageId === mqlStageId) mqlDeals.add(deal.id);
+        if (sqlStageId != null && newStageId === sqlStageId) sqlDeals.add(deal.id);
+      }
+
+      if (deal.add_time) {
+        const addMs = parsePipedriveDate(deal.add_time);
+        if (addMs >= fromMs && addMs <= toMs) {
+          const initial = initialStageId(deal, stageChanges);
+          if (initial != null) {
+            if (mqlStageId != null && initial === mqlStageId) mqlDeals.add(deal.id);
+            if (sqlStageId != null && initial === sqlStageId) sqlDeals.add(deal.id);
+          }
+        }
       }
     });
   }
 
-  return { mqls: mqlDeals.size, sqls: sqlDeals.size, inspectedDeals: dealIds.length };
+  return { mqls: mqlDeals.size, sqls: sqlDeals.size, inspectedDeals: deals.length };
 }
 
 export interface QualifiedLeadsCounts {
@@ -345,26 +388,34 @@ export async function pipedriveDebug(
   const stages = await listStages(apiKey);
   const mqlStage = findStage(stages, MQL_PATTERNS);
   const sqlStage = findStage(stages, SQL_PATTERNS);
-  const dealIds = await listDealsUpdatedSince(apiKey, from);
+  const deals = await listDealsUpdatedSince(apiKey, from);
 
   const fromMs = new Date(`${from}T00:00:00Z`).getTime();
   const toMs = new Date(`${to}T00:00:00Z`).getTime() + 86_400_000 - 1;
 
-  const sampleIds = dealIds.slice(0, 10);
+  const sample = deals.slice(0, 10);
   const sampleFlows = await Promise.all(
-    sampleIds.map(async (id) => {
+    sample.map(async (deal) => {
       try {
-        const events = await fetchDealFlow(apiKey, id);
-        const stageChanges = events
-          .filter(
-            (e) => e.object === "dealChange" && e.data.field_key === "stage_id",
-          )
-          .map((e) => {
+        const events = await fetchDealFlow(apiKey, deal.id);
+        const stageChanges = events.filter(
+          (e) => e.object === "dealChange" && e.data.field_key === "stage_id",
+        );
+        const initial = initialStageId(deal, stageChanges);
+        const addMs = deal.add_time ? parsePipedriveDate(deal.add_time) : NaN;
+        return {
+          dealId: deal.id,
+          add_time: deal.add_time,
+          createdInRange: addMs >= fromMs && addMs <= toMs,
+          current_stage_id: deal.stage_id,
+          initial_stage_id: initial,
+          initialMatchesMql: mqlStage ? initial === mqlStage.id : false,
+          initialMatchesSql: sqlStage ? initial === sqlStage.id : false,
+          stageChanges: stageChanges.map((e) => {
             const lt = eventTime(e);
             const logMs = lt ? parsePipedriveDate(lt) : NaN;
             return {
               log_time: lt,
-              parsedMs: logMs,
               inRange: logMs >= fromMs && logMs <= toMs,
               old_value: e.data.old_value,
               new_value: e.data.new_value,
@@ -375,10 +426,13 @@ export async function pipedriveDebug(
                 ? Number(e.data.new_value) === sqlStage.id
                 : false,
             };
-          });
-        return { dealId: id, stageChanges };
+          }),
+        };
       } catch (e) {
-        return { dealId: id, error: e instanceof Error ? e.message : String(e) };
+        return {
+          dealId: deal.id,
+          error: e instanceof Error ? e.message : String(e),
+        };
       }
     }),
   );
@@ -395,8 +449,8 @@ export async function pipedriveDebug(
       mql: mqlStage ? { id: mqlStage.id, name: mqlStage.name } : null,
       sql: sqlStage ? { id: sqlStage.id, name: sqlStage.name } : null,
     },
-    candidateDealIds: dealIds,
-    candidateDealCount: dealIds.length,
+    candidateDealCount: deals.length,
+    candidateDeals: deals,
     sampleFlows,
   };
 }
