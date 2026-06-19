@@ -393,6 +393,16 @@ export async function pipedriveDebug(
   const fromMs = new Date(`${from}T00:00:00Z`).getTime();
   const toMs = new Date(`${to}T00:00:00Z`).getTime() + 86_400_000 - 1;
 
+  const timelineUrl = url("/deals/timeline", apiKey, {
+    start_date: from,
+    interval: "day",
+    amount: String(dayCount(from, to)),
+    field_key: "add_time",
+    totals_convert_currency: "default_currency",
+  });
+  const timelineRes = await fetch(timelineUrl);
+  const timelineRaw = await timelineRes.json().catch(() => null);
+
   const sample = deals.slice(0, 10);
   const sampleFlows = await Promise.all(
     sample.map(async (deal) => {
@@ -452,6 +462,10 @@ export async function pipedriveDebug(
     candidateDealCount: deals.length,
     candidateDeals: deals,
     sampleFlows,
+    timelineAddTime: {
+      status: timelineRes.status,
+      raw: timelineRaw,
+    },
   };
 }
 
