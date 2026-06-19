@@ -12,18 +12,28 @@ export interface BreakdownRow {
 export interface WebsiteMetrics {
   ga4: {
     sessions: number;
+    sessionsChange: number | null;
     users: number;
+    usersChange: number | null;
     pageviews: number;
+    pageviewsChange: number | null;
     avgSessionDuration: number;
+    avgSessionDurationChange: number | null;
     bounceRate: number;
+    bounceRateChange: number | null;
     engagementRate: number;
+    engagementRateChange: number | null;
     connected: boolean;
   };
   searchConsole: {
     impressions: number;
+    impressionsChange: number | null;
     clicks: number;
+    clicksChange: number | null;
     ctr: number;
+    ctrChange: number | null;
     avgPosition: number;
+    avgPositionChange: number | null;
     connected: boolean;
   };
   trend: TrendPoint[];

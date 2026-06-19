@@ -12,6 +12,11 @@ const EMPTY_BREAKDOWNS: WebsiteMetrics["breakdowns"] = {
   byChannel: [],
 };
 
+function pctChange(current: number, previous: number): number | null {
+  if (!Number.isFinite(previous) || previous === 0) return null;
+  return ((current - previous) / previous) * 100;
+}
+
 export async function getWebsiteMetrics(
   userId: string,
   range: DateRange,
@@ -35,16 +40,36 @@ export async function getWebsiteMetrics(
     const ga4Active = ga4Conn?.status === "CONNECTED";
     const gscActive = gscConn?.status === "CONNECTED";
 
-    const [ga4Rows, gscRows, byCountry, byPage, byChannel] = await Promise.all([
+    const [
+      ga4Rows,
+      ga4PrevRows,
+      gscRows,
+      gscPrevRows,
+      byCountry,
+      byPage,
+      byChannel,
+    ] = await Promise.all([
       ga4Active && ga4Conn
         ? fetchGA4Rows(ga4Conn, current.from, current.to).catch((e) => {
             console.error("[metrics] GA4 rows failed", e);
             return null;
           })
         : Promise.resolve(null),
+      ga4Active && ga4Conn
+        ? fetchGA4Rows(ga4Conn, previous.from, previous.to).catch((e) => {
+            console.error("[metrics] GA4 prev rows failed", e);
+            return null;
+          })
+        : Promise.resolve(null),
       gscActive && gscConn
         ? fetchGSCRows(gscConn, current.from, current.to).catch((e) => {
             console.error("[metrics] GSC fetch failed", e);
+            return null;
+          })
+        : Promise.resolve(null),
+      gscActive && gscConn
+        ? fetchGSCRows(gscConn, previous.from, previous.to).catch((e) => {
+            console.error("[metrics] GSC prev fetch failed", e);
             return null;
           })
         : Promise.resolve(null),
@@ -85,23 +110,58 @@ export async function getWebsiteMetrics(
     const ga4Connected = ga4Rows !== null;
     const gscConnected = gscRows !== null;
 
+    const sessions = sumBy(ga4Rows ?? [], (r) => r.sessions);
+    const users = sumBy(ga4Rows ?? [], (r) => r.users);
+    const pageviews = sumBy(ga4Rows ?? [], (r) => r.pageviews);
+    const avgSessionDuration = avgBy(ga4Rows ?? [], (r) => r.avgSessionDuration);
+    const bounceRate = avgBy(ga4Rows ?? [], (r) => r.bounceRate);
+    const engagementRate = avgBy(ga4Rows ?? [], (r) => r.engagementRate);
+
+    const prevSessions = sumBy(ga4PrevRows ?? [], (r) => r.sessions);
+    const prevUsers = sumBy(ga4PrevRows ?? [], (r) => r.users);
+    const prevPageviews = sumBy(ga4PrevRows ?? [], (r) => r.pageviews);
+    const prevAvgSessionDuration = avgBy(
+      ga4PrevRows ?? [],
+      (r) => r.avgSessionDuration,
+    );
+    const prevBounceRate = avgBy(ga4PrevRows ?? [], (r) => r.bounceRate);
+    const prevEngagementRate = avgBy(ga4PrevRows ?? [], (r) => r.engagementRate);
+
     const ga4 = {
-      sessions: sumBy(ga4Rows ?? [], (r) => r.sessions),
-      users: sumBy(ga4Rows ?? [], (r) => r.users),
-      pageviews: sumBy(ga4Rows ?? [], (r) => r.pageviews),
-      avgSessionDuration: avgBy(ga4Rows ?? [], (r) => r.avgSessionDuration),
-      bounceRate: avgBy(ga4Rows ?? [], (r) => r.bounceRate),
-      engagementRate: avgBy(ga4Rows ?? [], (r) => r.engagementRate),
+      sessions,
+      sessionsChange: pctChange(sessions, prevSessions),
+      users,
+      usersChange: pctChange(users, prevUsers),
+      pageviews,
+      pageviewsChange: pctChange(pageviews, prevPageviews),
+      avgSessionDuration,
+      avgSessionDurationChange: pctChange(avgSessionDuration, prevAvgSessionDuration),
+      bounceRate,
+      bounceRateChange: pctChange(bounceRate, prevBounceRate),
+      engagementRate,
+      engagementRateChange: pctChange(engagementRate, prevEngagementRate),
       connected: ga4Connected,
     };
 
     const gscImpr = sumBy(gscRows ?? [], (r) => r.impressions);
     const gscClicks = sumBy(gscRows ?? [], (r) => r.clicks);
+    const gscCtr = safeRate(gscClicks, gscImpr);
+    const gscPosition = avgBy(gscRows ?? [], (r) => r.position);
+
+    const prevImpr = sumBy(gscPrevRows ?? [], (r) => r.impressions);
+    const prevClicks = sumBy(gscPrevRows ?? [], (r) => r.clicks);
+    const prevCtr = safeRate(prevClicks, prevImpr);
+    const prevPosition = avgBy(gscPrevRows ?? [], (r) => r.position);
+
     const searchConsole = {
       impressions: gscImpr,
+      impressionsChange: pctChange(gscImpr, prevImpr),
       clicks: gscClicks,
-      ctr: safeRate(gscClicks, gscImpr),
-      avgPosition: avgBy(gscRows ?? [], (r) => r.position),
+      clicksChange: pctChange(gscClicks, prevClicks),
+      ctr: gscCtr,
+      ctrChange: pctChange(gscCtr, prevCtr),
+      avgPosition: gscPosition,
+      avgPositionChange: pctChange(gscPosition, prevPosition),
       connected: gscConnected,
     };
 
