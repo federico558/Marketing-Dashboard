@@ -7,9 +7,17 @@ const TAG_LENGTH = 16;
 function getKey(): Buffer {
   const raw = process.env.ENCRYPTION_KEY;
   if (!raw) throw new Error("ENCRYPTION_KEY is not set");
-  const key = Buffer.from(raw, "hex");
+  const cleaned = raw.trim().replace(/^['"]|['"]$/g, "");
+  if (!/^[0-9a-fA-F]+$/.test(cleaned)) {
+    throw new Error(
+      `ENCRYPTION_KEY must be hex (0-9, a-f). Got ${cleaned.length} chars including non-hex.`,
+    );
+  }
+  const key = Buffer.from(cleaned, "hex");
   if (key.length !== 32) {
-    throw new Error("ENCRYPTION_KEY must be 32 bytes (64 hex chars)");
+    throw new Error(
+      `ENCRYPTION_KEY must be 32 bytes (64 hex chars). Got ${cleaned.length} hex chars = ${key.length} bytes.`,
+    );
   }
   return key;
 }
