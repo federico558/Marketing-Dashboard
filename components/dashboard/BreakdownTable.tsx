@@ -10,12 +10,12 @@ interface Props {
 
 export function BreakdownTable({ title, metricLabel, rows, emptyHint }: Props) {
   return (
-    <div className="rounded-md border">
-      <div className="flex items-center justify-between border-b px-3 py-2">
-        <span className="text-xs font-medium uppercase text-muted-foreground">
+    <div className="w-full min-w-0 max-w-full overflow-hidden rounded-md border">
+      <div className="flex w-full items-center justify-between gap-2 border-b px-3 py-2">
+        <span className="min-w-0 truncate text-xs font-medium uppercase text-muted-foreground">
           {title}
         </span>
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
           {metricLabel}
         </span>
       </div>
@@ -24,16 +24,16 @@ export function BreakdownTable({ title, metricLabel, rows, emptyHint }: Props) {
           {emptyHint ?? "No data for this period."}
         </div>
       ) : (
-        <ul className="divide-y">
+        <ul className="w-full divide-y">
           {rows.map((r) => (
             <li
               key={r.label}
-              className="flex items-center gap-2 px-3 py-2 text-sm"
+              className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-sm"
             >
-              <span className="min-w-0 flex-1 truncate" title={r.label}>
+              <span className="min-w-0 truncate" title={r.label}>
                 {r.label}
               </span>
-              <span className="flex shrink-0 items-center gap-2 font-mono text-xs">
+              <span className="flex shrink-0 items-center gap-2 whitespace-nowrap font-mono text-xs">
                 <span>{formatNumber(r.value)}</span>
                 <ChangeBadge change={r.changePercent} />
               </span>
