@@ -21,8 +21,10 @@ export function KpiCard({
   return (
     <Card className={cn("p-4", className)}>
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <div className="mt-1 flex items-baseline gap-2">
-        <span className="text-2xl font-semibold tracking-tight">{value}</span>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="break-words text-2xl font-semibold tracking-tight">
+          {value}
+        </span>
         {change !== undefined ? (
           <ChangeBadge change={change} invert={invertChangeColor} />
         ) : null}
