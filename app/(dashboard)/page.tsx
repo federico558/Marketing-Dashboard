@@ -4,6 +4,7 @@ import { parseRange } from "@/lib/dates";
 import { getExecutiveSummary } from "@/lib/metrics/summary";
 import { DateRangePicker } from "@/components/dashboard/DateRangePicker";
 import { RefreshDataButton } from "@/components/dashboard/RefreshDataButton";
+import { SalesFunnelSection } from "@/components/dashboard/sections/SalesFunnelSection";
 import { WebsiteSection } from "@/components/dashboard/sections/WebsiteSection";
 import { OutreachSection } from "@/components/dashboard/sections/OutreachSection";
 import { CrmSection } from "@/components/dashboard/sections/CrmSection";
@@ -44,6 +45,7 @@ export default async function DashboardPage({
       </header>
 
       <div className="grid gap-6">
+        <SalesFunnelSection data={summary} />
         <WebsiteSection data={summary.website} />
         <OutreachSection data={summary.outreach} />
         <CrmSection data={summary.crm} />
