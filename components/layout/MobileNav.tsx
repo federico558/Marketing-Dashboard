@@ -4,6 +4,7 @@ import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   BarChart3,
+  Filter,
   Link2,
   LogOut,
   Menu,
@@ -47,6 +48,9 @@ export function MobileNav({ email, signOutAction }: Props) {
           <nav className="flex-1 space-y-1 px-3 py-4 text-sm">
             <NavItem href="/" icon={<Sparkles className="h-4 w-4" />} onClick={close}>
               Executive Summary
+            </NavItem>
+            <NavItem href="/funnel" icon={<Filter className="h-4 w-4" />} onClick={close}>
+              Sales Funnel
             </NavItem>
             <div className="mt-6 px-3 text-xs font-medium uppercase text-muted-foreground">
               Settings

@@ -4,13 +4,11 @@ import { parseRange } from "@/lib/dates";
 import { getExecutiveSummary } from "@/lib/metrics/summary";
 import { DateRangePicker } from "@/components/dashboard/DateRangePicker";
 import { RefreshDataButton } from "@/components/dashboard/RefreshDataButton";
-import { WebsiteSection } from "@/components/dashboard/sections/WebsiteSection";
-import { OutreachSection } from "@/components/dashboard/sections/OutreachSection";
-import { CrmSection } from "@/components/dashboard/sections/CrmSection";
+import { SalesFunnelSection } from "@/components/dashboard/sections/SalesFunnelSection";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage({
+export default async function FunnelPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -30,11 +28,9 @@ export default async function DashboardPage({
     <div className="space-y-6">
       <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Executive Summary
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Sales Funnel</h1>
           <p className="text-sm text-muted-foreground">
-            Marketing performance across your connected sources.
+            End-to-end view from reach to closed deals.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -43,11 +39,7 @@ export default async function DashboardPage({
         </div>
       </header>
 
-      <div className="grid gap-6">
-        <WebsiteSection data={summary.website} />
-        <OutreachSection data={summary.outreach} />
-        <CrmSection data={summary.crm} />
-      </div>
+      <SalesFunnelSection data={summary} />
     </div>
   );
 }

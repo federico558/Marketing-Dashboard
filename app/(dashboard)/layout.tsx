@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   BarChart3,
+  Filter,
   Link2,
   LogOut,
   Settings,
@@ -36,6 +37,9 @@ export default async function DashboardLayout({
         <nav className="flex-1 space-y-1 px-3 py-4 text-sm">
           <NavLink href="/" icon={<Sparkles className="h-4 w-4" />}>
             Executive Summary
+          </NavLink>
+          <NavLink href="/funnel" icon={<Filter className="h-4 w-4" />}>
+            Sales Funnel
           </NavLink>
           <div className="mt-6 px-3 text-xs font-medium uppercase text-muted-foreground">
             Settings
