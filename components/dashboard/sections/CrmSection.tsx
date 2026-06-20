@@ -60,6 +60,11 @@ export function CrmSection({ data }: { data: CrmMetrics }) {
                 label="Deals created"
                 value={formatNumber(data.dealsCreated)}
                 change={data.dealsCreatedChange}
+                hint={
+                  data.qualifyingThreshold
+                    ? `${data.qualifyingThreshold} or later`
+                    : "No \"Quote requested\" stage detected — counting all stages"
+                }
               />
               <KpiCard
                 label="Deals won"
@@ -93,10 +98,20 @@ export function CrmSection({ data }: { data: CrmMetrics }) {
               <KpiCard
                 label="Open deals"
                 value={formatNumber(data.openDeals)}
+                hint={
+                  data.qualifyingThreshold
+                    ? `${data.qualifyingThreshold} or later`
+                    : undefined
+                }
               />
               <KpiCard
                 label="Open pipeline value"
                 value={formatCurrency(data.openDealsValue)}
+                hint={
+                  data.qualifyingThreshold
+                    ? `${data.qualifyingThreshold} or later`
+                    : undefined
+                }
               />
             </div>
           </div>
