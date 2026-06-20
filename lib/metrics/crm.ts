@@ -30,6 +30,7 @@ function emptyMetrics(connected: boolean): CrmMetrics {
     sqls: 0,
     sqlsChange: null,
     sqlStageName: null,
+    qualifyingThreshold: null,
     trend: [],
     connected,
   };
@@ -101,6 +102,7 @@ export async function getCrmMetrics(
       sqls: curr.qualified.sqls,
       sqlsChange: prev ? pctChange(curr.qualified.sqls, prev.qualified.sqls) : null,
       sqlStageName: curr.qualified.sqlStageName,
+      qualifyingThreshold: curr.qualifyingThreshold,
       trend,
       connected: true,
     };

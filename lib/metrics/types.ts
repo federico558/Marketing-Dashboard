@@ -79,6 +79,7 @@ export interface CrmMetrics {
   sqls: number;
   sqlsChange: number | null;
   sqlStageName: string | null;
+  qualifyingThreshold: string | null;
   trend: TrendPoint[];
   connected: boolean;
 }

@@ -41,16 +41,17 @@ async function fetchTimeline(
   fieldKey: "add_time" | "won_time" | "lost_time",
   from: string,
   to: string,
+  options: { stageId?: number } = {},
 ): Promise<{ rows: PipedriveDayRow[]; totalCount: number; totalValue: number }> {
-  const res = await fetch(
-    url("/deals/timeline", apiKey, {
-      start_date: from,
-      interval: "day",
-      amount: String(dayCount(from, to)),
-      field_key: fieldKey,
-      totals_convert_currency: "default_currency",
-    }),
-  );
+  const params: Record<string, string> = {
+    start_date: from,
+    interval: "day",
+    amount: String(dayCount(from, to)),
+    field_key: fieldKey,
+    totals_convert_currency: "default_currency",
+  };
+  if (options.stageId != null) params.stage_id = String(options.stageId);
+  const res = await fetch(url("/deals/timeline", apiKey, params));
   if (!res.ok) {
     throw new Error(`Pipedrive timeline (${fieldKey}) failed: ${res.status}`);
   }
@@ -77,12 +78,51 @@ async function fetchTimeline(
   return { rows, totalCount, totalValue };
 }
 
+async function fetchTimelineAcrossStages(
+  apiKey: string,
+  fieldKey: "add_time" | "won_time" | "lost_time",
+  from: string,
+  to: string,
+  stageIds: number[],
+): Promise<{ rows: PipedriveDayRow[]; totalCount: number; totalValue: number }> {
+  if (stageIds.length === 0) {
+    return fetchTimeline(apiKey, fieldKey, from, to);
+  }
+  const results = await Promise.all(
+    stageIds.map((id) => fetchTimeline(apiKey, fieldKey, from, to, { stageId: id })),
+  );
+  let totalCount = 0;
+  let totalValue = 0;
+  const dailyMap = new Map<string, { count: number; value: number }>();
+  for (const r of results) {
+    totalCount += r.totalCount;
+    totalValue += r.totalValue;
+    for (const row of r.rows) {
+      const cur = dailyMap.get(row.date) ?? { count: 0, value: 0 };
+      cur.count += row.count;
+      cur.value += row.value;
+      dailyMap.set(row.date, cur);
+    }
+  }
+  const rows = Array.from(dailyMap.entries())
+    .map(([date, v]) => ({ date, count: v.count, value: v.value }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  return { rows, totalCount, totalValue };
+}
+
 export interface PipedriveStage {
   id: number;
   name: string;
   order_nr: number;
   pipeline_id: number;
   active_flag?: boolean;
+}
+
+interface PipedrivePipeline {
+  id: number;
+  name: string;
+  order_nr: number;
+  active?: boolean;
 }
 
 async function listStages(apiKey: string): Promise<PipedriveStage[]> {
@@ -92,12 +132,41 @@ async function listStages(apiKey: string): Promise<PipedriveStage[]> {
   return (json.data ?? []).filter((s) => s.active_flag !== false);
 }
 
+async function listPipelines(apiKey: string): Promise<PipedrivePipeline[]> {
+  const res = await fetch(url("/pipelines", apiKey));
+  if (!res.ok) throw new Error(`Pipedrive pipelines failed: ${res.status}`);
+  const json = (await res.json()) as { data?: PipedrivePipeline[] };
+  return (json.data ?? []).filter((p) => p.active !== false);
+}
+
 function findStage(stages: PipedriveStage[], patterns: RegExp[]): PipedriveStage | null {
   for (const p of patterns) {
     const hit = stages.find((s) => p.test(s.name));
     if (hit) return hit;
   }
   return null;
+}
+
+const QUALIFIED_PATTERNS = [/quote[\s_-]*requested/i];
+
+function computeQualifyingStageIds(
+  stages: PipedriveStage[],
+  pipelines: PipedrivePipeline[],
+): { stageIds: number[]; targetName: string | null } {
+  const target = findStage(stages, QUALIFIED_PATTERNS);
+  if (!target) return { stageIds: [], targetName: null };
+  const targetPipeline = pipelines.find((p) => p.id === target.pipeline_id);
+  const targetPipelineOrder = targetPipeline?.order_nr ?? 0;
+  const stageIds: number[] = [];
+  for (const s of stages) {
+    if (s.pipeline_id === target.pipeline_id) {
+      if (s.order_nr >= target.order_nr) stageIds.push(s.id);
+    } else {
+      const p = pipelines.find((pp) => pp.id === s.pipeline_id);
+      if (p && p.order_nr > targetPipelineOrder) stageIds.push(s.id);
+    }
+  }
+  return { stageIds, targetName: target.name };
 }
 
 function parsePipedriveDate(s: string): number {
@@ -336,8 +405,13 @@ export interface PipedriveSnapshot {
   value: number;
 }
 
-async function fetchOpenDealsSnapshot(apiKey: string): Promise<PipedriveSnapshot> {
-  const res = await fetch(url("/deals/summary", apiKey, { status: "open" }));
+async function fetchOpenDealsSnapshot(
+  apiKey: string,
+  stageId?: number,
+): Promise<PipedriveSnapshot> {
+  const params: Record<string, string> = { status: "open" };
+  if (stageId != null) params.stage_id = String(stageId);
+  const res = await fetch(url("/deals/summary", apiKey, params));
   if (!res.ok) {
     throw new Error(`Pipedrive deals summary failed: ${res.status}`);
   }
@@ -360,12 +434,32 @@ async function fetchOpenDealsSnapshot(apiKey: string): Promise<PipedriveSnapshot
   return { count, value };
 }
 
+async function fetchOpenDealsSnapshotForStages(
+  apiKey: string,
+  stageIds: number[],
+): Promise<PipedriveSnapshot> {
+  if (stageIds.length === 0) return fetchOpenDealsSnapshot(apiKey);
+  const results = await Promise.all(
+    stageIds.map((id) =>
+      fetchOpenDealsSnapshot(apiKey, id).catch((e) => {
+        console.error(`[pipedrive] open snapshot stage ${id} failed`, e);
+        return { count: 0, value: 0 } as PipedriveSnapshot;
+      }),
+    ),
+  );
+  return {
+    count: results.reduce((a, r) => a + r.count, 0),
+    value: results.reduce((a, r) => a + r.value, 0),
+  };
+}
+
 export interface PipedriveRange {
   created: { count: number; value: number; byDay: PipedriveDayRow[] };
   won: { count: number; value: number; byDay: PipedriveDayRow[] };
   lost: { count: number; value: number; byDay: PipedriveDayRow[] };
   openSnapshot: PipedriveSnapshot;
   qualified: QualifiedLeadsCounts;
+  qualifyingThreshold: string | null;
 }
 
 export async function pipedriveDebug(
@@ -464,15 +558,23 @@ export async function fetchPipedriveRange(
 ): Promise<PipedriveRange> {
   if (!conn.apiKeyEnc) throw new Error("Pipedrive connection missing API key");
   const apiKey = decrypt(conn.apiKeyEnc);
-  const stages = await listStages(apiKey).catch((e) => {
-    console.error("[pipedrive] listStages failed", e);
-    return [] as PipedriveStage[];
-  });
+  const [stages, pipelines] = await Promise.all([
+    listStages(apiKey).catch((e) => {
+      console.error("[pipedrive] listStages failed", e);
+      return [] as PipedriveStage[];
+    }),
+    listPipelines(apiKey).catch((e) => {
+      console.error("[pipedrive] listPipelines failed", e);
+      return [] as PipedrivePipeline[];
+    }),
+  ]);
+  const { stageIds: qualifyingStageIds, targetName: qualifyingThreshold } =
+    computeQualifyingStageIds(stages, pipelines);
   const [created, won, lost, openSnapshot, qualified] = await Promise.all([
-    fetchTimeline(apiKey, "add_time", from, to),
+    fetchTimelineAcrossStages(apiKey, "add_time", from, to, qualifyingStageIds),
     fetchTimeline(apiKey, "won_time", from, to),
     fetchTimeline(apiKey, "lost_time", from, to),
-    fetchOpenDealsSnapshot(apiKey),
+    fetchOpenDealsSnapshotForStages(apiKey, qualifyingStageIds),
     fetchQualifiedLeads(apiKey, stages, from, to),
   ]);
   return {
@@ -481,5 +583,6 @@ export async function fetchPipedriveRange(
     lost: { count: lost.totalCount, value: lost.totalValue, byDay: lost.rows },
     openSnapshot,
     qualified,
+    qualifyingThreshold,
   };
 }
