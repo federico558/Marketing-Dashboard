@@ -78,35 +78,66 @@ async function fetchTimeline(
   return { rows, totalCount, totalValue };
 }
 
-async function fetchTimelineAcrossStages(
+async function fetchCreatedDealsFiltered(
   apiKey: string,
-  fieldKey: "add_time" | "won_time" | "lost_time",
   from: string,
   to: string,
-  stageIds: number[],
+  qualifyingStageIds: number[],
 ): Promise<{ rows: PipedriveDayRow[]; totalCount: number; totalValue: number }> {
-  if (stageIds.length === 0) {
-    return fetchTimeline(apiKey, fieldKey, from, to);
+  if (qualifyingStageIds.length === 0) {
+    return fetchTimeline(apiKey, "add_time", from, to);
   }
-  const results = await Promise.all(
-    stageIds.map((id) => fetchTimeline(apiKey, fieldKey, from, to, { stageId: id })),
+  const res = await fetch(
+    url("/deals/timeline", apiKey, {
+      start_date: from,
+      interval: "day",
+      amount: String(dayCount(from, to)),
+      field_key: "add_time",
+      totals_convert_currency: "default_currency",
+    }),
   );
+  if (!res.ok) {
+    throw new Error(`Pipedrive timeline (add_time, filtered) failed: ${res.status}`);
+  }
+  const json = (await res.json()) as {
+    data?: Array<{
+      period_start?: string;
+      deals?: Array<{ id: number; stage_id?: number; value?: number; currency?: string }>;
+      totals?: { count?: number; values?: Record<string, number> | unknown[] };
+      totals_converted?: { value?: number };
+    }>;
+  };
+  const periods = json.data ?? [];
+  const allowed = new Set(qualifyingStageIds);
+  const rows: PipedriveDayRow[] = [];
   let totalCount = 0;
   let totalValue = 0;
-  const dailyMap = new Map<string, { count: number; value: number }>();
-  for (const r of results) {
-    totalCount += r.totalCount;
-    totalValue += r.totalValue;
-    for (const row of r.rows) {
-      const cur = dailyMap.get(row.date) ?? { count: 0, value: 0 };
-      cur.count += row.count;
-      cur.value += row.value;
-      dailyMap.set(row.date, cur);
+  for (const p of periods) {
+    const dealsArr = p.deals ?? [];
+    const matched = dealsArr.filter(
+      (d) => d.stage_id != null && allowed.has(d.stage_id),
+    );
+    const allValues = Array.isArray(p.totals?.values)
+      ? 0
+      : Object.values(p.totals?.values ?? {}).reduce((a, b) => a + Number(b ?? 0), 0);
+    const convertedTotal = Number(p.totals_converted?.value ?? 0);
+    const matchedRawValue = matched.reduce(
+      (a, d) => a + Number(d.value ?? 0),
+      0,
+    );
+    const dayValue =
+      allValues > 0 ? (matchedRawValue / allValues) * convertedTotal : 0;
+    const dayCountNum = matched.length;
+    totalCount += dayCountNum;
+    totalValue += dayValue;
+    if (p.period_start) {
+      rows.push({
+        date: p.period_start.slice(0, 10),
+        count: dayCountNum,
+        value: dayValue,
+      });
     }
   }
-  const rows = Array.from(dailyMap.entries())
-    .map(([date, v]) => ({ date, count: v.count, value: v.value }))
-    .sort((a, b) => a.date.localeCompare(b.date));
   return { rows, totalCount, totalValue };
 }
 
@@ -571,7 +602,7 @@ export async function fetchPipedriveRange(
   const { stageIds: qualifyingStageIds, targetName: qualifyingThreshold } =
     computeQualifyingStageIds(stages, pipelines);
   const [created, won, lost, openSnapshot, qualified] = await Promise.all([
-    fetchTimelineAcrossStages(apiKey, "add_time", from, to, qualifyingStageIds),
+    fetchCreatedDealsFiltered(apiKey, from, to, qualifyingStageIds),
     fetchTimeline(apiKey, "won_time", from, to),
     fetchTimeline(apiKey, "lost_time", from, to),
     fetchOpenDealsSnapshotForStages(apiKey, qualifyingStageIds),
