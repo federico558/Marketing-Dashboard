@@ -11,6 +11,7 @@ import {
 import { auth, signOut } from "@/lib/auth/config";
 import { Button } from "@/components/ui/button";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default async function DashboardLayout({
   children,
@@ -52,8 +53,9 @@ export default async function DashboardLayout({
           </NavLink>
         </nav>
         <div className="border-t p-3">
-          <div className="px-2 py-2 text-xs text-muted-foreground">
-            {session.user.email}
+          <div className="flex items-center justify-between px-2 py-2 text-xs text-muted-foreground">
+            <span className="truncate">{session.user.email}</span>
+            <ThemeToggle />
           </div>
           <form action={handleSignOut}>
             <Button
@@ -75,7 +77,7 @@ export default async function DashboardLayout({
             <BarChart3 className="h-5 w-5 text-primary" />
             <span className="text-sm font-semibold">Marketing Dashboard</span>
           </div>
-          <div className="w-9" aria-hidden />
+          <ThemeToggle />
         </header>
         <div className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-8">
           {children}
