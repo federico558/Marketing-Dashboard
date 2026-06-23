@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { TrendChart } from "@/components/dashboard/TrendChart";
+import { TrendChart, type TrendSeries } from "@/components/dashboard/TrendChart";
 import { Button } from "@/components/ui/button";
 import type { TrendPoint } from "@/lib/metrics/types";
 
@@ -15,7 +15,7 @@ const PRESETS: { label: string; value: Preset }[] = [
 
 interface Props {
   section: "website" | "outreach" | "crm" | "social";
-  series: { key: string; label: string; color: string }[];
+  series: TrendSeries[];
   defaultPreset?: Preset;
   height?: number;
 }
