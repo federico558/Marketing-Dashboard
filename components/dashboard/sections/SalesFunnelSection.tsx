@@ -84,17 +84,30 @@ function TopOfFunnel({ data }: { data: ExecutiveSummary }) {
   const lem = data.outreach.lemlist;
   const sl = data.outreach.smartlead;
   const combined = data.outreach.combined;
+  const social = data.social;
+  const socialTotals = social.channels.reduce(
+    (acc, c) => ({
+      impressions: acc.impressions + c.impressions,
+      engagement: acc.engagement + c.engagement,
+      posts: acc.posts + c.posts,
+    }),
+    { impressions: 0, engagement: 0, posts: 0 },
+  );
   const anything =
-    ga4.connected || searchConsole.connected || lem.connected || sl.connected;
+    ga4.connected ||
+    searchConsole.connected ||
+    lem.connected ||
+    sl.connected ||
+    social.connected;
 
   return (
     <FunnelLevel
       label="Top of funnel"
       title="Reach & awareness"
-      subtitle="Website, search, outreach"
+      subtitle="Website, search, outreach, social"
     >
       {!anything ? (
-        <EmptyHint label="Connect GA4, Search Console, Lemlist, or Smartlead to populate this level." />
+        <EmptyHint label="Connect GA4, Search Console, Lemlist, Smartlead, or Buffer to populate this level." />
       ) : null}
 
       {ga4.connected ? (
@@ -148,6 +161,14 @@ function TopOfFunnel({ data }: { data: ExecutiveSummary }) {
           <KpiCard label="Open rate" value={formatPercent(combined.openRate)} />
           <KpiCard label="Replies" value={formatNumber(combined.replies)} />
           <KpiCard label="Reply rate" value={formatPercent(combined.replyRate)} />
+        </Group>
+      ) : null}
+
+      {social.connected && social.channels.length > 0 ? (
+        <Group title="Social (Buffer)" cols="3">
+          <KpiCard label="Posts" value={formatNumber(socialTotals.posts)} />
+          <KpiCard label="Impressions" value={formatNumber(socialTotals.impressions)} />
+          <KpiCard label="Engagement" value={formatNumber(socialTotals.engagement)} />
         </Group>
       ) : null}
     </FunnelLevel>

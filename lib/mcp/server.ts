@@ -6,6 +6,7 @@ import { getExecutiveSummary } from "@/lib/metrics/summary";
 import { getWebsiteMetrics } from "@/lib/metrics/website";
 import { getOutreachMetrics } from "@/lib/metrics/outreach";
 import { getCrmMetrics } from "@/lib/metrics/crm";
+import { getSocialMetrics } from "@/lib/metrics/social";
 
 const DateRangeSchema = {
   from: z.string().describe("Start date in YYYY-MM-DD"),
@@ -29,7 +30,7 @@ export function buildMcpServer(userId: string): McpServer {
 
   server.tool(
     "get_executive_summary",
-    "Full executive summary across website, outreach, and CRM.",
+    "Full executive summary across website, outreach, CRM, and social.",
     DateRangeSchema,
     async (input) => {
       const range = rangeFromInput(input);
@@ -76,6 +77,16 @@ export function buildMcpServer(userId: string): McpServer {
     DateRangeSchema,
     async (input) => {
       const result = await getCrmMetrics(userId, rangeFromInput(input));
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    "get_social_stats",
+    "Buffer — per-channel social post performance (impressions, reach, engagement, top posts).",
+    DateRangeSchema,
+    async (input) => {
+      const result = await getSocialMetrics(userId, rangeFromInput(input));
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     },
   );
