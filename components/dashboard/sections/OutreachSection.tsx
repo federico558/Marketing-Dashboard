@@ -1,6 +1,6 @@
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { SectionCard } from "@/components/dashboard/SectionCard";
-import { TrendChart } from "@/components/dashboard/TrendChart";
+import { TrendChartCard } from "@/components/dashboard/TrendChartCard";
 import { formatNumber, formatPercent } from "@/lib/utils";
 import type { OutreachChannelStats, OutreachMetrics } from "@/lib/metrics/types";
 
@@ -40,18 +40,13 @@ export function OutreachSection({ data }: { data: OutreachMetrics }) {
         <ChannelRow title="Lemlist" stats={data.lemlist} />
         <ChannelRow title="Smartlead" stats={data.smartlead} />
         {anyConnected ? (
-          <div>
-            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-              Trend
-            </div>
-            <TrendChart
-              data={data.trend}
-              series={[
-                { key: "sent", label: "Sent", color: "#3b82f6" },
-                { key: "replies", label: "Replies", color: "#f59e0b" },
-              ]}
-            />
-          </div>
+          <TrendChartCard
+            section="outreach"
+            series={[
+              { key: "sent", label: "Sent", color: "#3b82f6" },
+              { key: "replies", label: "Replies", color: "#f59e0b" },
+            ]}
+          />
         ) : null}
       </div>
     </SectionCard>
