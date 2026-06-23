@@ -18,6 +18,11 @@ export function SocialSection({ data }: { data: SocialMetrics }) {
         <EmptyHint label="No posts in this period across your connected Buffer channels." />
       ) : (
         <div className="space-y-6">
+          {!data.metricsAvailable ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              Connected, but performance metrics need the <code className="font-mono">insights:read</code> scope. In Buffer → Account → Developers, regenerate your personal API token with that scope checked, then paste it again in Settings → Connections.
+            </div>
+          ) : null}
           {data.channels.map((c) => (
             <div key={c.service}>
               <div className="mb-2 flex items-baseline justify-between">

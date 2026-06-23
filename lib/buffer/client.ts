@@ -8,11 +8,11 @@ interface GraphQLResponse<T> {
   errors?: Array<{ message: string }>;
 }
 
-async function graphql<T>(
+async function graphqlRaw<T>(
   apiKey: string,
   query: string,
   variables?: Record<string, unknown>,
-): Promise<T> {
+): Promise<GraphQLResponse<T>> {
   const res = await fetch(ENDPOINT, {
     method: "POST",
     headers: {
@@ -24,7 +24,15 @@ async function graphql<T>(
   if (!res.ok) {
     throw new Error(`Buffer GraphQL failed: ${res.status} ${await res.text()}`);
   }
-  const json = (await res.json()) as GraphQLResponse<T>;
+  return (await res.json()) as GraphQLResponse<T>;
+}
+
+async function graphql<T>(
+  apiKey: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<T> {
+  const json = await graphqlRaw<T>(apiKey, query, variables);
   if (json.errors?.length) {
     throw new Error(
       `Buffer GraphQL errors: ${json.errors.map((e) => e.message).join("; ")}`,
@@ -34,6 +42,10 @@ async function graphql<T>(
     throw new Error("Buffer GraphQL returned no data");
   }
   return json.data;
+}
+
+function isInsightsScopeError(errors: Array<{ message: string }>): boolean {
+  return errors.some((e) => /insights:read|Insufficient scope/i.test(e.message));
 }
 
 export async function verifyBufferKey(apiKey: string): Promise<void> {
@@ -96,6 +108,25 @@ const POSTS_QUERY = `
           channelId
           channel { id service name displayName }
           metrics { name value }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+`;
+
+const POSTS_QUERY_NO_METRICS = `
+  query Posts($input: PostsInput!, $first: Int!, $after: String) {
+    posts(input: $input, first: $first, after: $after) {
+      edges {
+        cursor
+        node {
+          id
+          text
+          dueAt
+          sentAt
+          channelId
+          channel { id service name displayName }
         }
       }
       pageInfo { hasNextPage endCursor }
@@ -175,20 +206,37 @@ async function fetchPostsForOrganization(
   organizationId: string,
   fromMs: number,
   toMs: number,
-): Promise<BufferPost[]> {
+  useMetrics: boolean,
+): Promise<{ posts: BufferPost[]; scopeError: boolean }> {
   const out: BufferPost[] = [];
   let cursor: string | null = null;
+  let scopeError = false;
   const MAX_PAGES = 20;
   for (let i = 0; i < MAX_PAGES; i += 1) {
-    const data: PostsResponse = await graphql(apiKey, POSTS_QUERY, {
-      input: {
-        organizationId,
-        filter: { status: ["sent"] },
-        sort: [{ field: "dueAt", direction: "desc" }],
+    const json: GraphQLResponse<PostsResponse> = await graphqlRaw<PostsResponse>(
+      apiKey,
+      useMetrics ? POSTS_QUERY : POSTS_QUERY_NO_METRICS,
+      {
+        input: {
+          organizationId,
+          filter: { status: ["sent"] },
+          sort: [{ field: "dueAt", direction: "desc" }],
+        },
+        first: 50,
+        after: cursor,
       },
-      first: 50,
-      after: cursor,
-    });
+    );
+    if (json.errors?.length) {
+      if (useMetrics && isInsightsScopeError(json.errors)) {
+        scopeError = true;
+        break;
+      }
+      throw new Error(
+        `Buffer GraphQL errors: ${json.errors.map((e: { message: string }) => e.message).join("; ")}`,
+      );
+    }
+    const data: PostsResponse | undefined = json.data;
+    if (!data) break;
     const edges = data.posts?.edges ?? [];
     let allTooOld = edges.length > 0;
     for (const edge of edges) {
@@ -207,24 +255,41 @@ async function fetchPostsForOrganization(
     if (!pageInfo?.hasNextPage || !pageInfo.endCursor) break;
     cursor = pageInfo.endCursor;
   }
-  return out;
+  return { posts: out, scopeError };
+}
+
+export interface BufferFetchResult {
+  posts: BufferPost[];
+  metricsAvailable: boolean;
 }
 
 export async function fetchBufferPosts(
   conn: Connection,
   from: string,
   to: string,
-): Promise<BufferPost[]> {
+): Promise<BufferFetchResult> {
   if (!conn.apiKeyEnc) throw new Error("Buffer connection missing API key");
   const apiKey = decrypt(conn.apiKeyEnc);
   const fromMs = new Date(`${from}T00:00:00Z`).getTime();
   const toMs = new Date(`${to}T00:00:00Z`).getTime() + 86_400_000 - 1;
   const orgIds = await listOrganizations(apiKey);
-  if (orgIds.length === 0) return [];
-  const perOrg = await Promise.all(
-    orgIds.map((id) => fetchPostsForOrganization(apiKey, id, fromMs, toMs)),
+  if (orgIds.length === 0) return { posts: [], metricsAvailable: true };
+  const withMetrics = await Promise.all(
+    orgIds.map((id) => fetchPostsForOrganization(apiKey, id, fromMs, toMs, true)),
   );
-  return perOrg.flat();
+  if (withMetrics.some((r) => r.scopeError)) {
+    const fallback = await Promise.all(
+      orgIds.map((id) => fetchPostsForOrganization(apiKey, id, fromMs, toMs, false)),
+    );
+    return {
+      posts: fallback.flatMap((r) => r.posts),
+      metricsAvailable: false,
+    };
+  }
+  return {
+    posts: withMetrics.flatMap((r) => r.posts),
+    metricsAvailable: true,
+  };
 }
 
 export async function bufferDebug(
@@ -256,19 +321,36 @@ export async function bufferDebug(
     postMetricSchema = { error: e instanceof Error ? e.message : String(e) };
   }
   let postsRaw: unknown = null;
+  let postsNoMetricsRaw: unknown = null;
   if (orgIds[0]) {
-    try {
-      postsRaw = await graphql(apiKey, POSTS_QUERY, {
-        input: {
-          organizationId: orgIds[0],
-          filter: { status: ["sent"] },
-          sort: [{ field: "dueAt", direction: "desc" }],
-        },
-        first: 10,
-        after: null,
-      });
-    } catch (e) {
-      postsRaw = { error: e instanceof Error ? e.message : String(e) };
+    const variables = {
+      input: {
+        organizationId: orgIds[0],
+        filter: { status: ["sent"] },
+        sort: [{ field: "dueAt", direction: "desc" }],
+      },
+      first: 10,
+      after: null,
+    };
+    const withMetrics = await graphqlRaw(apiKey, POSTS_QUERY, variables).catch(
+      (e) => ({ error: e instanceof Error ? e.message : String(e) }),
+    );
+    postsRaw = withMetrics;
+    const hasErrors =
+      withMetrics &&
+      typeof withMetrics === "object" &&
+      "errors" in withMetrics &&
+      Array.isArray((withMetrics as { errors?: unknown[] }).errors) &&
+      ((withMetrics as { errors: Array<{ message: string }> }).errors).length > 0;
+    if (hasErrors) {
+      const errs = (withMetrics as { errors: Array<{ message: string }> }).errors;
+      if (isInsightsScopeError(errs)) {
+        postsNoMetricsRaw = await graphqlRaw(
+          apiKey,
+          POSTS_QUERY_NO_METRICS,
+          variables,
+        ).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+      }
     }
   }
   return {
@@ -276,5 +358,6 @@ export async function bufferDebug(
     account,
     postMetricSchema,
     postsRaw,
+    postsNoMetricsRaw,
   };
 }

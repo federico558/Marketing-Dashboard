@@ -43,9 +43,13 @@ function emptyTotals(): SocialMetrics["totals"] {
   };
 }
 
-function emptyMetrics(connected: boolean): SocialMetrics {
+function emptyMetrics(
+  connected: boolean,
+  metricsAvailable = true,
+): SocialMetrics {
   return {
     connected,
+    metricsAvailable,
     channels: [],
     topPosts: [],
     trend: [],
@@ -110,19 +114,22 @@ export async function getSocialMetrics(
 
     const current = formatRangeISO(range);
     const previous = formatRangeISO(previousRange(range));
-    const [curr, prev] = await Promise.all([
+    const [currResult, prevResult] = await Promise.all([
       fetchBufferPosts(conn, current.from, current.to).catch((e) => {
         console.error("[metrics] Buffer current failed", e);
         return null;
       }),
       fetchBufferPosts(conn, previous.from, previous.to).catch((e) => {
         console.error("[metrics] Buffer previous failed", e);
-        return [] as BufferPost[];
+        return { posts: [] as BufferPost[], metricsAvailable: true };
       }),
     ]);
 
-    if (!curr) return emptyMetrics(true);
+    if (!currResult) return emptyMetrics(true);
 
+    const curr = currResult.posts;
+    const prev = prevResult.posts;
+    const metricsAvailable = currResult.metricsAvailable;
     const currentByChannel = totalsByChannel(curr);
     const previousByChannel = totalsByChannel(prev ?? []);
     const channels: SocialChannelStats[] = Array.from(currentByChannel.entries())
@@ -192,6 +199,13 @@ export async function getSocialMetrics(
       engagementChange: pctChange(currTotals.engagement, prevTotals.engagement),
     };
 
-    return { connected: true, channels, topPosts, trend, totals };
+    return {
+      connected: true,
+      metricsAvailable,
+      channels,
+      topPosts,
+      trend,
+      totals,
+    };
   });
 }
