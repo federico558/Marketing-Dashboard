@@ -65,6 +65,7 @@ enum Provider {
   LEMLIST
   SMARTLEAD
   PIPEDRIVE
+  BUFFER
 }
 
 enum ConnectionStatus {

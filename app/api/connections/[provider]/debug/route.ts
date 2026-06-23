@@ -5,6 +5,7 @@ import { decrypt } from "@/lib/crypto";
 import { isProvider } from "@/lib/providers";
 import { smartleadDebug } from "@/lib/smartlead/client";
 import { pipedriveDebug } from "@/lib/pipedrive/client";
+import { bufferDebug } from "@/lib/buffer/client";
 import { parseRange, formatRangeISO } from "@/lib/dates";
 
 export async function GET(
@@ -54,6 +55,21 @@ export async function GET(
     }
     try {
       const result = await pipedriveDebug(decrypt(conn.apiKeyEnc), from, to);
+      return NextResponse.json({ range: { from, to }, result });
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "debug failed" },
+        { status: 500 },
+      );
+    }
+  }
+
+  if (provider === "BUFFER") {
+    if (!conn.apiKeyEnc) {
+      return NextResponse.json({ error: "missing key" }, { status: 400 });
+    }
+    try {
+      const result = await bufferDebug(decrypt(conn.apiKeyEnc), from, to);
       return NextResponse.json({ range: { from, to }, result });
     } catch (e) {
       return NextResponse.json(

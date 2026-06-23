@@ -84,9 +84,42 @@ export interface CrmMetrics {
   connected: boolean;
 }
 
+export interface SocialChannelStats {
+  service: string;
+  channelName: string;
+  posts: number;
+  postsChange: number | null;
+  impressions: number;
+  impressionsChange: number | null;
+  reach: number;
+  reachChange: number | null;
+  engagement: number;
+  engagementChange: number | null;
+  engagementRate: number;
+  engagementRateChange: number | null;
+}
+
+export interface SocialTopPost {
+  id: string;
+  text: string;
+  service: string;
+  channelName: string;
+  sentAt: string;
+  impressions: number;
+  engagement: number;
+}
+
+export interface SocialMetrics {
+  connected: boolean;
+  channels: SocialChannelStats[];
+  topPosts: SocialTopPost[];
+  trend: TrendPoint[];
+}
+
 export interface ExecutiveSummary {
   website: WebsiteMetrics;
   outreach: OutreachMetrics;
   crm: CrmMetrics;
+  social: SocialMetrics;
   generatedAt: string;
 }

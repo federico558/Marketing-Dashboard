@@ -40,6 +40,12 @@ export const PROVIDERS: Record<Provider, ProviderConfig> = {
     description: "Deals created, won, lost, win rate and open pipeline value.",
     authMode: "api_key",
   },
+  BUFFER: {
+    id: "BUFFER",
+    label: "Buffer",
+    description: "Social post performance across LinkedIn, Instagram and other connected channels.",
+    authMode: "api_key",
+  },
 };
 
 export const PROVIDER_LIST: ProviderConfig[] = [
@@ -48,6 +54,7 @@ export const PROVIDER_LIST: ProviderConfig[] = [
   PROVIDERS.LEMLIST,
   PROVIDERS.SMARTLEAD,
   PROVIDERS.PIPEDRIVE,
+  PROVIDERS.BUFFER,
 ];
 
 export function isProvider(v: string): v is Provider {
