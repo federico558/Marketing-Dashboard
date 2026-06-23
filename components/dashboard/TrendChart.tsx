@@ -11,9 +11,16 @@ import {
 } from "recharts";
 import type { TrendPoint } from "@/lib/metrics/types";
 
+export interface TrendSeries {
+  key: string;
+  label: string;
+  color: string;
+  yAxisId?: "left" | "right";
+}
+
 interface TrendChartProps {
   data: TrendPoint[];
-  series: { key: string; label: string; color: string }[];
+  series: TrendSeries[];
   height?: number;
 }
 
@@ -28,6 +35,7 @@ export function TrendChart({ data, series, height = 240 }: TrendChartProps) {
       </div>
     );
   }
+  const hasRight = series.some((s) => s.yAxisId === "right");
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
@@ -37,7 +45,19 @@ export function TrendChart({ data, series, height = 240 }: TrendChartProps) {
           tick={{ fontSize: 11 }}
           stroke="hsl(var(--muted-foreground))"
         />
-        <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+        <YAxis
+          yAxisId="left"
+          tick={{ fontSize: 11 }}
+          stroke="hsl(var(--muted-foreground))"
+        />
+        {hasRight ? (
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tick={{ fontSize: 11 }}
+            stroke="hsl(var(--muted-foreground))"
+          />
+        ) : null}
         <Tooltip
           contentStyle={{
             background: "hsl(var(--popover))",
@@ -50,6 +70,7 @@ export function TrendChart({ data, series, height = 240 }: TrendChartProps) {
         {series.map((s) => (
           <Line
             key={s.key}
+            yAxisId={s.yAxisId ?? "left"}
             type="monotone"
             dataKey={s.key}
             name={s.label}

@@ -164,9 +164,15 @@ export async function getSocialMetrics(
     for (const p of curr) {
       const date = (p.sentAt ?? "").slice(0, 10);
       if (!date) continue;
-      const cur = trendMap.get(date) ?? { date, impressions: 0, engagement: 0 };
+      const cur = trendMap.get(date) ?? {
+        date,
+        impressions: 0,
+        engagement: 0,
+        posts: 0,
+      };
       cur.impressions = (cur.impressions as number) + p.impressions;
       cur.engagement = (cur.engagement as number) + p.engagement;
+      cur.posts = (cur.posts as number) + 1;
       trendMap.set(date, cur);
     }
     const trend = Array.from(trendMap.values()).sort((a, b) =>

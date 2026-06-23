@@ -25,10 +25,15 @@ export function SocialSection({ data }: { data: SocialMetrics }) {
                   {c.channelName}
                 </span>
                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  vs previous period · {formatNumber(c.posts)} posts
+                  vs previous period
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                <KpiCard
+                  label="Posts"
+                  value={formatNumber(c.posts)}
+                  change={c.postsChange}
+                />
                 <KpiCard
                   label="Impressions"
                   value={formatNumber(c.impressions)}
@@ -75,6 +80,7 @@ export function SocialSection({ data }: { data: SocialMetrics }) {
             series={[
               { key: "impressions", label: "Impressions", color: "#3b82f6" },
               { key: "engagement", label: "Engagement", color: "#f59e0b" },
+              { key: "posts", label: "Posts", color: "#10b981", yAxisId: "right" },
             ]}
           />
         </div>
