@@ -30,8 +30,27 @@ function pctChange(current: number, previous: number): number | null {
   return ((current - previous) / previous) * 100;
 }
 
+function emptyTotals(): SocialMetrics["totals"] {
+  return {
+    posts: 0,
+    postsChange: null,
+    impressions: 0,
+    impressionsChange: null,
+    reach: 0,
+    reachChange: null,
+    engagement: 0,
+    engagementChange: null,
+  };
+}
+
 function emptyMetrics(connected: boolean): SocialMetrics {
-  return { connected, channels: [], topPosts: [], trend: [] };
+  return {
+    connected,
+    channels: [],
+    topPosts: [],
+    trend: [],
+    totals: emptyTotals(),
+  };
 }
 
 interface ChannelTotals {
@@ -39,6 +58,17 @@ interface ChannelTotals {
   impressions: number;
   reach: number;
   engagement: number;
+}
+
+function aggregateTotals(posts: BufferPost[]): ChannelTotals {
+  const t: ChannelTotals = { posts: 0, impressions: 0, reach: 0, engagement: 0 };
+  for (const p of posts) {
+    t.posts += 1;
+    t.impressions += p.impressions;
+    t.reach += p.reach;
+    t.engagement += p.engagement;
+  }
+  return t;
 }
 
 function totalsByChannel(posts: BufferPost[]): Map<string, ChannelTotals & { channelName: string }> {
@@ -143,6 +173,19 @@ export async function getSocialMetrics(
       (a.date as string).localeCompare(b.date as string),
     );
 
-    return { connected: true, channels, topPosts, trend };
+    const currTotals = aggregateTotals(curr);
+    const prevTotals = aggregateTotals(prev ?? []);
+    const totals: SocialMetrics["totals"] = {
+      posts: currTotals.posts,
+      postsChange: pctChange(currTotals.posts, prevTotals.posts),
+      impressions: currTotals.impressions,
+      impressionsChange: pctChange(currTotals.impressions, prevTotals.impressions),
+      reach: currTotals.reach,
+      reachChange: pctChange(currTotals.reach, prevTotals.reach),
+      engagement: currTotals.engagement,
+      engagementChange: pctChange(currTotals.engagement, prevTotals.engagement),
+    };
+
+    return { connected: true, channels, topPosts, trend, totals };
   });
 }

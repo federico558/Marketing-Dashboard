@@ -1,10 +1,10 @@
 import { withCache, cacheKey } from "@/lib/cache";
 import type { DateRange } from "@/lib/dates";
-import { formatRangeISO, rangeKey } from "@/lib/dates";
+import { formatRangeISO, previousRange, rangeKey } from "@/lib/dates";
 import { fetchLemlistRows } from "@/lib/lemlist/client";
 import { fetchSmartleadRows } from "@/lib/smartlead/client";
 import { getConnection, safeRate, sumBy } from "./helpers";
-import type { OutreachMetrics, TrendPoint } from "./types";
+import type { OutreachChannelStats, OutreachMetrics, TrendPoint } from "./types";
 
 interface DayRow {
   date: string;
@@ -19,13 +19,31 @@ interface ChannelTotals {
   replies: number;
 }
 
-function totalsToStats(t: ChannelTotals, connected: boolean) {
+function pctChange(current: number, previous: number): number | null {
+  if (!Number.isFinite(previous) || previous === 0) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+function totalsToStats(
+  t: ChannelTotals,
+  prev: ChannelTotals,
+  connected: boolean,
+): OutreachChannelStats {
+  const openRate = safeRate(t.opens, t.sent);
+  const replyRate = safeRate(t.replies, t.sent);
+  const prevOpenRate = safeRate(prev.opens, prev.sent);
+  const prevReplyRate = safeRate(prev.replies, prev.sent);
   return {
     sent: t.sent,
+    sentChange: pctChange(t.sent, prev.sent),
     opens: t.opens,
+    opensChange: pctChange(t.opens, prev.opens),
     replies: t.replies,
-    openRate: safeRate(t.opens, t.sent),
-    replyRate: safeRate(t.replies, t.sent),
+    repliesChange: pctChange(t.replies, prev.replies),
+    openRate,
+    openRateChange: pctChange(openRate, prevOpenRate),
+    replyRate,
+    replyRateChange: pctChange(replyRate, prevReplyRate),
     connected,
   };
 }
@@ -36,6 +54,25 @@ function totals(rows: DayRow[]): ChannelTotals {
     opens: sumBy(rows, (r) => r.opens),
     replies: sumBy(rows, (r) => r.replies),
   };
+}
+
+const ZERO_TOTALS: ChannelTotals = { sent: 0, opens: 0, replies: 0 };
+
+async function loadRows(
+  provider: "LEMLIST" | "SMARTLEAD",
+  userId: string,
+  from: string,
+  to: string,
+): Promise<DayRow[] | null> {
+  const conn = await getConnection(userId, provider);
+  if (!conn || conn.status !== "CONNECTED") return null;
+  try {
+    if (provider === "LEMLIST") return await fetchLemlistRows(conn, from, to);
+    return await fetchSmartleadRows(conn, from, to);
+  } catch (e) {
+    console.error(`[metrics] ${provider} fetch failed`, e);
+    return null;
+  }
 }
 
 export async function getOutreachMetrics(
@@ -51,33 +88,30 @@ export async function getOutreachMetrics(
     rangeKey(range),
   ]);
   return withCache(key, userId, async () => {
-    const { from, to } = formatRangeISO(range);
-    const [lemConn, slConn] = await Promise.all([
-      getConnection(userId, "LEMLIST"),
-      getConnection(userId, "SMARTLEAD"),
+    const current = formatRangeISO(range);
+    const previous = formatRangeISO(previousRange(range));
+    const [lemRows, slRows, lemPrev, slPrev] = await Promise.all([
+      loadRows("LEMLIST", userId, current.from, current.to),
+      loadRows("SMARTLEAD", userId, current.from, current.to),
+      loadRows("LEMLIST", userId, previous.from, previous.to),
+      loadRows("SMARTLEAD", userId, previous.from, previous.to),
     ]);
-
-    const lemRows = lemConn?.status === "CONNECTED"
-      ? await fetchLemlistRows(lemConn, from, to).catch((e) => {
-          console.error("[metrics] Lemlist fetch failed", e);
-          return null;
-        })
-      : null;
-    const slRows = slConn?.status === "CONNECTED"
-      ? await fetchSmartleadRows(slConn, from, to).catch((e) => {
-          console.error("[metrics] Smartlead fetch failed", e);
-          return null;
-        })
-      : null;
 
     const lemConnected = lemRows !== null;
     const slConnected = slRows !== null;
     const lemTotals = totals(lemRows ?? []);
     const slTotals = totals(slRows ?? []);
+    const lemPrevTotals = totals(lemPrev ?? []);
+    const slPrevTotals = totals(slPrev ?? []);
     const combined: ChannelTotals = {
       sent: lemTotals.sent + slTotals.sent,
       opens: lemTotals.opens + slTotals.opens,
       replies: lemTotals.replies + slTotals.replies,
+    };
+    const combinedPrev: ChannelTotals = {
+      sent: lemPrevTotals.sent + slPrevTotals.sent,
+      opens: lemPrevTotals.opens + slPrevTotals.opens,
+      replies: lemPrevTotals.replies + slPrevTotals.replies,
     };
 
     const trendMap = new Map<string, TrendPoint>();
@@ -98,9 +132,21 @@ export async function getOutreachMetrics(
     );
 
     return {
-      lemlist: totalsToStats(lemTotals, lemConnected),
-      smartlead: totalsToStats(slTotals, slConnected),
-      combined: totalsToStats(combined, lemConnected || slConnected),
+      lemlist: totalsToStats(
+        lemTotals,
+        lemConnected ? lemPrevTotals : ZERO_TOTALS,
+        lemConnected,
+      ),
+      smartlead: totalsToStats(
+        slTotals,
+        slConnected ? slPrevTotals : ZERO_TOTALS,
+        slConnected,
+      ),
+      combined: totalsToStats(
+        combined,
+        combinedPrev,
+        lemConnected || slConnected,
+      ),
       trend,
     };
   });

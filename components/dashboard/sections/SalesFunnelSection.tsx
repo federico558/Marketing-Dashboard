@@ -79,14 +79,6 @@ function TopOfFunnel({ data }: { data: ExecutiveSummary }) {
   const sl = data.outreach.smartlead;
   const combined = data.outreach.combined;
   const social = data.social;
-  const socialTotals = social.channels.reduce(
-    (acc, c) => ({
-      impressions: acc.impressions + c.impressions,
-      engagement: acc.engagement + c.engagement,
-      posts: acc.posts + c.posts,
-    }),
-    { impressions: 0, engagement: 0, posts: 0 },
-  );
   const anything =
     ga4.connected ||
     searchConsole.connected ||
@@ -151,18 +143,46 @@ function TopOfFunnel({ data }: { data: ExecutiveSummary }) {
 
       {lem.connected || sl.connected ? (
         <Group title="Outreach (Lemlist + Smartlead)" cols="4">
-          <KpiCard label="Messages sent" value={formatNumber(combined.sent)} />
-          <KpiCard label="Open rate" value={formatPercent(combined.openRate)} />
-          <KpiCard label="Replies" value={formatNumber(combined.replies)} />
-          <KpiCard label="Reply rate" value={formatPercent(combined.replyRate)} />
+          <KpiCard
+            label="Messages sent"
+            value={formatNumber(combined.sent)}
+            change={combined.sentChange}
+          />
+          <KpiCard
+            label="Open rate"
+            value={formatPercent(combined.openRate)}
+            change={combined.openRateChange}
+          />
+          <KpiCard
+            label="Replies"
+            value={formatNumber(combined.replies)}
+            change={combined.repliesChange}
+          />
+          <KpiCard
+            label="Reply rate"
+            value={formatPercent(combined.replyRate)}
+            change={combined.replyRateChange}
+          />
         </Group>
       ) : null}
 
       {social.connected && social.channels.length > 0 ? (
         <Group title="Social (Buffer)" cols="3">
-          <KpiCard label="Posts" value={formatNumber(socialTotals.posts)} />
-          <KpiCard label="Impressions" value={formatNumber(socialTotals.impressions)} />
-          <KpiCard label="Engagement" value={formatNumber(socialTotals.engagement)} />
+          <KpiCard
+            label="Posts"
+            value={formatNumber(social.totals.posts)}
+            change={social.totals.postsChange}
+          />
+          <KpiCard
+            label="Impressions"
+            value={formatNumber(social.totals.impressions)}
+            change={social.totals.impressionsChange}
+          />
+          <KpiCard
+            label="Engagement"
+            value={formatNumber(social.totals.engagement)}
+            change={social.totals.engagementChange}
+          />
         </Group>
       ) : null}
     </FunnelLevel>
