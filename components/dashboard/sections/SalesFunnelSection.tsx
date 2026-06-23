@@ -1,5 +1,4 @@
 import { KpiCard } from "@/components/dashboard/KpiCard";
-import { SectionCard } from "@/components/dashboard/SectionCard";
 import {
   formatCurrency,
   formatDuration,
@@ -10,16 +9,11 @@ import type { ExecutiveSummary } from "@/lib/metrics/types";
 
 export function SalesFunnelSection({ data }: { data: ExecutiveSummary }) {
   return (
-    <SectionCard
-      title="Sales Funnel"
-      description="End-to-end marketing funnel from awareness to closed deals"
-    >
-      <div className="space-y-4">
-        <TopOfFunnel data={data} />
-        <MiddleOfFunnel data={data} />
-        <BottomOfFunnel data={data} />
-      </div>
-    </SectionCard>
+    <>
+      <TopOfFunnel data={data} />
+      <MiddleOfFunnel data={data} />
+      <BottomOfFunnel data={data} />
+    </>
   );
 }
 
