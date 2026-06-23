@@ -116,6 +116,7 @@ export interface SocialTopPost {
 
 export interface SocialMetrics {
   connected: boolean;
+  metricsAvailable: boolean;
   channels: SocialChannelStats[];
   topPosts: SocialTopPost[];
   trend: TrendPoint[];
