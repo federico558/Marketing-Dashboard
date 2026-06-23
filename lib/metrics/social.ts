@@ -96,20 +96,10 @@ function totalsByChannel(posts: BufferPost[]): Map<string, ChannelTotals & { cha
   return m;
 }
 
-export async function getSocialMetrics(
-  userId: string,
-  range: DateRange,
-): Promise<SocialMetrics> {
-  const key = cacheKey([
-    "user",
-    userId,
-    "provider",
-    "social",
-    "range",
-    rangeKey(range),
-  ]);
-  return withCache(key, userId, async () => {
-    const conn = await getConnection(userId, "BUFFER");
+export async function getSocialMetrics(range: DateRange): Promise<SocialMetrics> {
+  const key = cacheKey(["provider", "social", "range", rangeKey(range)]);
+  return withCache(key, async () => {
+    const conn = await getConnection("BUFFER");
     if (!conn || conn.status !== "CONNECTED") return emptyMetrics(false);
 
     const current = formatRangeISO(range);

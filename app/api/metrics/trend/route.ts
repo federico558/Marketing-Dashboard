@@ -25,20 +25,19 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unknown section" }, { status: 400 });
   }
   const range = parseRange(url.searchParams);
-  const userId = session.user.id;
   let trend: unknown = [];
   switch (section) {
     case "website":
-      trend = (await getWebsiteMetrics(userId, range)).trend;
+      trend = (await getWebsiteMetrics(range)).trend;
       break;
     case "outreach":
-      trend = (await getOutreachMetrics(userId, range)).trend;
+      trend = (await getOutreachMetrics(range)).trend;
       break;
     case "crm":
-      trend = (await getCrmMetrics(userId, range)).trend;
+      trend = (await getCrmMetrics(range)).trend;
       break;
     case "social":
-      trend = (await getSocialMetrics(userId, range)).trend;
+      trend = (await getSocialMetrics(range)).trend;
       break;
   }
   return NextResponse.json({ trend });

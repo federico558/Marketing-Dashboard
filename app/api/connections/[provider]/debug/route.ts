@@ -22,7 +22,7 @@ export async function GET(
     return NextResponse.json({ error: "unknown provider" }, { status: 400 });
   }
   const conn = await prisma.connection.findUnique({
-    where: { userId_provider: { userId: session.user.id, provider } },
+    where: { provider },
   });
   if (!conn) {
     return NextResponse.json({ error: "not connected" }, { status: 404 });

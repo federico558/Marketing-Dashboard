@@ -22,7 +22,7 @@ function rangeFromInput(input: { from: string; to: string }) {
   return parseRange(sp);
 }
 
-export function buildMcpServer(userId: string): McpServer {
+export function buildMcpServer(): McpServer {
   const server = new McpServer({
     name: "marketing-dashboard",
     version: "0.1.0",
@@ -34,7 +34,7 @@ export function buildMcpServer(userId: string): McpServer {
     DateRangeSchema,
     async (input) => {
       const range = rangeFromInput(input);
-      const result = await getExecutiveSummary(userId, range);
+      const result = await getExecutiveSummary(range);
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     },
   );
@@ -44,7 +44,7 @@ export function buildMcpServer(userId: string): McpServer {
     "Google Analytics 4 + Google Search Console.",
     DateRangeSchema,
     async (input) => {
-      const result = await getWebsiteMetrics(userId, rangeFromInput(input));
+      const result = await getWebsiteMetrics(rangeFromInput(input));
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     },
   );
@@ -57,7 +57,7 @@ export function buildMcpServer(userId: string): McpServer {
       source: z.enum(["lemlist", "smartlead", "combined"]).optional(),
     },
     async (input) => {
-      const result = await getOutreachMetrics(userId, rangeFromInput(input));
+      const result = await getOutreachMetrics(rangeFromInput(input));
       const source = input.source ?? "combined";
       const slice =
         source === "lemlist"
@@ -76,7 +76,7 @@ export function buildMcpServer(userId: string): McpServer {
     "Pipedrive CRM — deals created, won, lost, win rate, won value, open pipeline.",
     DateRangeSchema,
     async (input) => {
-      const result = await getCrmMetrics(userId, rangeFromInput(input));
+      const result = await getCrmMetrics(rangeFromInput(input));
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     },
   );
@@ -86,18 +86,17 @@ export function buildMcpServer(userId: string): McpServer {
     "Buffer — per-channel social post performance (impressions, reach, engagement, top posts).",
     DateRangeSchema,
     async (input) => {
-      const result = await getSocialMetrics(userId, rangeFromInput(input));
+      const result = await getSocialMetrics(rangeFromInput(input));
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
     "list_connections",
-    "List the data sources connected for this user.",
+    "List the data sources connected to this dashboard.",
     {},
     async () => {
       const rows = await prisma.connection.findMany({
-        where: { userId },
         select: { provider: true, status: true, updatedAt: true },
       });
       return { content: [{ type: "text", text: JSON.stringify(rows) }] };

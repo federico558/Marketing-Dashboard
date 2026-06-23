@@ -60,11 +60,10 @@ const ZERO_TOTALS: ChannelTotals = { sent: 0, opens: 0, replies: 0 };
 
 async function loadRows(
   provider: "LEMLIST" | "SMARTLEAD",
-  userId: string,
   from: string,
   to: string,
 ): Promise<DayRow[] | null> {
-  const conn = await getConnection(userId, provider);
+  const conn = await getConnection(provider);
   if (!conn || conn.status !== "CONNECTED") return null;
   try {
     if (provider === "LEMLIST") return await fetchLemlistRows(conn, from, to);
@@ -76,25 +75,17 @@ async function loadRows(
 }
 
 export async function getOutreachMetrics(
-  userId: string,
   range: DateRange,
 ): Promise<OutreachMetrics> {
-  const key = cacheKey([
-    "user",
-    userId,
-    "provider",
-    "outreach",
-    "range",
-    rangeKey(range),
-  ]);
-  return withCache(key, userId, async () => {
+  const key = cacheKey(["provider", "outreach", "range", rangeKey(range)]);
+  return withCache(key, async () => {
     const current = formatRangeISO(range);
     const previous = formatRangeISO(previousRange(range));
     const [lemRows, slRows, lemPrev, slPrev] = await Promise.all([
-      loadRows("LEMLIST", userId, current.from, current.to),
-      loadRows("SMARTLEAD", userId, current.from, current.to),
-      loadRows("LEMLIST", userId, previous.from, previous.to),
-      loadRows("SMARTLEAD", userId, previous.from, previous.to),
+      loadRows("LEMLIST", current.from, current.to),
+      loadRows("SMARTLEAD", current.from, current.to),
+      loadRows("LEMLIST", previous.from, previous.to),
+      loadRows("SMARTLEAD", previous.from, previous.to),
     ]);
 
     const lemConnected = lemRows !== null;

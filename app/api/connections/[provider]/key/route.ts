@@ -7,7 +7,7 @@ import { verifyLemlistKey } from "@/lib/lemlist/client";
 import { verifySmartleadKey } from "@/lib/smartlead/client";
 import { verifyPipedriveKey } from "@/lib/pipedrive/client";
 import { verifyBufferKey } from "@/lib/buffer/client";
-import { invalidateUserMetrics } from "@/lib/cache";
+import { invalidateMetrics } from "@/lib/cache";
 
 export async function POST(
   req: Request,
@@ -50,9 +50,8 @@ export async function POST(
   try {
     const enc = encrypt(apiKey);
     await prisma.connection.upsert({
-      where: { userId_provider: { userId: session.user.id, provider } },
+      where: { provider },
       create: {
-        userId: session.user.id,
         provider,
         status: "CONNECTED",
         apiKeyEnc: enc,
@@ -63,7 +62,7 @@ export async function POST(
         meta: undefined,
       },
     });
-    await invalidateUserMetrics(session.user.id);
+    await invalidateMetrics();
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("[connections/key] save failed", e);

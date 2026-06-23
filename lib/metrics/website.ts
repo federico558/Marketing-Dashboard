@@ -18,23 +18,15 @@ function pctChange(current: number, previous: number): number | null {
 }
 
 export async function getWebsiteMetrics(
-  userId: string,
   range: DateRange,
 ): Promise<WebsiteMetrics> {
-  const key = cacheKey([
-    "user",
-    userId,
-    "provider",
-    "website",
-    "range",
-    rangeKey(range),
-  ]);
-  return withCache(key, userId, async () => {
+  const key = cacheKey(["provider", "website", "range", rangeKey(range)]);
+  return withCache(key, async () => {
     const current = formatRangeISO(range);
     const previous = formatRangeISO(previousRange(range));
     const [ga4Conn, gscConn] = await Promise.all([
-      getConnection(userId, "GA4"),
-      getConnection(userId, "SEARCH_CONSOLE"),
+      getConnection("GA4"),
+      getConnection("SEARCH_CONSOLE"),
     ]);
 
     const ga4Active = ga4Conn?.status === "CONNECTED";

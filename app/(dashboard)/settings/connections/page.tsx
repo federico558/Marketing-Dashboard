@@ -18,9 +18,7 @@ export default async function ConnectionsPage({
   const connectedFlag = typeof params.connected === "string" ? params.connected : null;
   const errorFlag = typeof params.error === "string" ? params.error : null;
 
-  const rows = await prisma.connection.findMany({
-    where: { userId: session.user.id },
-  });
+  const rows = await prisma.connection.findMany();
   const byProvider = new Map(rows.map((r) => [r.provider, r]));
 
   return (

@@ -30,7 +30,10 @@ async function handle(req: Request) {
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
-  const server = buildMcpServer(userId);
+  // Token authorization is still per-user (see authUserId), but the data
+  // exposed by the server is workspace-level — connections are shared.
+  void userId;
+  const server = buildMcpServer();
   await server.connect(transport);
 
   const { req: nodeReq, res: nodeRes, response } = createNodeShims(req, body);

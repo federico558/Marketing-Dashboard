@@ -6,7 +6,7 @@ import { exchangeCode, getAppUrl } from "@/lib/google/oauth";
 import { listGA4Properties } from "@/lib/google/ga4";
 import { listGSCSites } from "@/lib/google/searchConsole";
 import { isProvider } from "@/lib/providers";
-import { invalidateUserMetrics } from "@/lib/cache";
+import { invalidateMetrics } from "@/lib/cache";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -18,14 +18,14 @@ export async function GET(req: Request) {
   if (!state) return NextResponse.redirect(`${back}?error=missing_state`);
   const decoded = verifyState(state);
   if (!decoded) return NextResponse.redirect(`${back}?error=invalid_state`);
-  const { userId, provider } = decoded;
+  const { provider } = decoded;
   if (!isProvider(provider) || (provider !== "GA4" && provider !== "SEARCH_CONSOLE")) {
     return NextResponse.redirect(`${back}?error=unknown_provider`);
   }
 
   if (error) {
     await prisma.connection.updateMany({
-      where: { userId, provider },
+      where: { provider },
       data: { status: "ERROR", meta: { error } },
     });
     return NextResponse.redirect(`${back}?error=${encodeURIComponent(error)}`);
@@ -39,9 +39,8 @@ export async function GET(req: Request) {
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
     const conn = await prisma.connection.upsert({
-      where: { userId_provider: { userId, provider } },
+      where: { provider },
       create: {
-        userId,
         provider,
         status: "PENDING",
         accessTokenEnc: encrypt(tokens.access_token),
@@ -95,14 +94,14 @@ export async function GET(req: Request) {
         meta: undefined,
       },
     });
-    await invalidateUserMetrics(userId);
+    await invalidateMetrics();
 
     return NextResponse.redirect(`${back}?connected=${provider.toLowerCase()}`);
   } catch (e) {
     console.error("[google/callback] failed", e);
     const msg = e instanceof Error ? e.message : "unknown_error";
     await prisma.connection.updateMany({
-      where: { userId, provider },
+      where: { provider },
       data: { status: "ERROR", meta: { error: msg } },
     });
     return NextResponse.redirect(`${back}?error=${encodeURIComponent(msg)}`);
