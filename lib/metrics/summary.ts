@@ -7,15 +7,14 @@ import { getSocialMetrics } from "./social";
 import type { ExecutiveSummary } from "./types";
 
 export async function getExecutiveSummary(
-  userId: string,
   range: DateRange,
 ): Promise<ExecutiveSummary> {
   const socialRange = rangeFromPreset("30d");
   const [website, outreach, crm, social] = await Promise.all([
-    getWebsiteMetrics(userId, range),
-    getOutreachMetrics(userId, range),
-    getCrmMetrics(userId, range),
-    getSocialMetrics(userId, socialRange),
+    getWebsiteMetrics(range),
+    getOutreachMetrics(range),
+    getCrmMetrics(range),
+    getSocialMetrics(socialRange),
   ]);
   return {
     website,

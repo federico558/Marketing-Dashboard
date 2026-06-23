@@ -36,20 +36,10 @@ function emptyMetrics(connected: boolean): CrmMetrics {
   };
 }
 
-export async function getCrmMetrics(
-  userId: string,
-  range: DateRange,
-): Promise<CrmMetrics> {
-  const key = cacheKey([
-    "user",
-    userId,
-    "provider",
-    "crm",
-    "range",
-    rangeKey(range),
-  ]);
-  return withCache(key, userId, async () => {
-    const conn = await getConnection(userId, "PIPEDRIVE");
+export async function getCrmMetrics(range: DateRange): Promise<CrmMetrics> {
+  const key = cacheKey(["provider", "crm", "range", rangeKey(range)]);
+  return withCache(key, async () => {
+    const conn = await getConnection("PIPEDRIVE");
     if (!conn || conn.status !== "CONNECTED") return emptyMetrics(false);
 
     const current = formatRangeISO(range);

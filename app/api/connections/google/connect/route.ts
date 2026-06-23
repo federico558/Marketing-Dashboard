@@ -18,8 +18,8 @@ export async function POST(req: Request) {
   }
 
   await prisma.connection.upsert({
-    where: { userId_provider: { userId: session.user.id, provider } },
-    create: { userId: session.user.id, provider, status: "PENDING" },
+    where: { provider },
+    create: { provider, status: "PENDING" },
     update: { status: "PENDING" },
   });
 

@@ -26,7 +26,6 @@ export async function getCache<T>(key: string): Promise<T | null> {
 
 export async function setCache<T>(
   key: string,
-  userId: string,
   value: T,
   ttlMs = TTL_MS,
 ): Promise<void> {
@@ -34,38 +33,24 @@ export async function setCache<T>(
   memory.set(key, { value, expiresAt: expiresAt.getTime() });
   await prisma.cacheEntry.upsert({
     where: { key },
-    create: { key, userId, value: value as object, expiresAt },
+    create: { key, value: value as object, expiresAt },
     update: { value: value as object, expiresAt },
   });
 }
 
-export async function invalidateUserProvider(userId: string, providerSlug: string) {
-  const prefix = `user:${userId}:provider:${providerSlug}`;
-  for (const k of memory.keys()) {
-    if (k.startsWith(prefix)) memory.delete(k);
-  }
-  await prisma.cacheEntry.deleteMany({
-    where: { userId, key: { startsWith: prefix } },
-  });
-}
-
-export async function invalidateUserMetrics(userId: string) {
-  const prefix = `user:${userId}:`;
-  for (const k of memory.keys()) {
-    if (k.startsWith(prefix)) memory.delete(k);
-  }
-  await prisma.cacheEntry.deleteMany({ where: { userId } });
+export async function invalidateMetrics() {
+  memory.clear();
+  await prisma.cacheEntry.deleteMany({});
 }
 
 export async function withCache<T>(
   key: string,
-  userId: string,
   loader: () => Promise<T>,
   ttlMs = TTL_MS,
 ): Promise<T> {
   const cached = await getCache<T>(key);
   if (cached !== null) return cached;
   const value = await loader();
-  await setCache(key, userId, value, ttlMs);
+  await setCache(key, value, ttlMs);
   return value;
 }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { prisma } from "@/lib/db";
 import { isProvider } from "@/lib/providers";
-import { invalidateUserMetrics } from "@/lib/cache";
+import { invalidateMetrics } from "@/lib/cache";
 
 export async function DELETE(
   _req: Request,
@@ -17,9 +17,7 @@ export async function DELETE(
   if (!isProvider(provider)) {
     return NextResponse.json({ error: "unknown provider" }, { status: 400 });
   }
-  await prisma.connection.deleteMany({
-    where: { userId: session.user.id, provider },
-  });
-  await invalidateUserMetrics(session.user.id);
+  await prisma.connection.deleteMany({ where: { provider } });
+  await invalidateMetrics();
   return NextResponse.json({ ok: true });
 }

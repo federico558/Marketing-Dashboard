@@ -11,6 +11,6 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const range = parseRange(url.searchParams);
-  const summary = await getExecutiveSummary(session.user.id, range);
+  const summary = await getExecutiveSummary(range);
   return NextResponse.json({ range, summary });
 }

@@ -22,7 +22,7 @@ export default async function FunnelPage({
     if (typeof v === "string") sp.set(k, v);
   }
   const range = parseRange(sp);
-  const summary = await getExecutiveSummary(session.user.id, range);
+  const summary = await getExecutiveSummary(range);
 
   return (
     <div className="space-y-6">

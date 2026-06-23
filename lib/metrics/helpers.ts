@@ -1,10 +1,8 @@
 import type { Provider } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
-export async function getConnection(userId: string, provider: Provider) {
-  return prisma.connection.findUnique({
-    where: { userId_provider: { userId, provider } },
-  });
+export async function getConnection(provider: Provider) {
+  return prisma.connection.findUnique({ where: { provider } });
 }
 
 export function sumBy<T>(rows: T[], pick: (r: T) => number): number {

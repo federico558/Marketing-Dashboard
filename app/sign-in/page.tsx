@@ -10,8 +10,8 @@ export default async function SignInPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const check = params.check === "email";
   const error = typeof params.error === "string" ? params.error : null;
+  const badCreds = error === "CredentialsSignin";
   const accessDenied = error === "AccessDenied";
 
   return (
@@ -22,50 +22,63 @@ export default async function SignInPage({
           <h1 className="text-xl font-semibold">Marketing Dashboard</h1>
         </div>
 
-        {check ? (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-            Check your inbox for a sign-in link.
+        {badCreds ? (
+          <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+            Incorrect email or password — or this email isn&apos;t authorized
+            to access the dashboard.
           </div>
-        ) : (
-          <>
-            {accessDenied ? (
-              <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-                This email isn&apos;t authorized to access the dashboard.
-              </div>
-            ) : error ? (
-              <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-                Sign-in failed: {error}
-              </div>
-            ) : null}
-            <p className="mb-6 text-sm text-muted-foreground">
-              Sign in with your email — we&apos;ll send you a magic link.
-            </p>
-            <form
-              action={async (formData: FormData) => {
-                "use server";
-                await signIn("resend", {
-                  email: formData.get("email"),
-                  redirectTo: "/",
-                });
-              }}
-              className="space-y-4"
-            >
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  placeholder="you@example.com"
-                />
-              </div>
-              <Button type="submit" className="w-full">
-                Send magic link
-              </Button>
-            </form>
-          </>
-        )}
+        ) : accessDenied ? (
+          <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+            This email isn&apos;t authorized to access the dashboard.
+          </div>
+        ) : error ? (
+          <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+            Sign-in failed: {error}
+          </div>
+        ) : null}
+
+        <p className="mb-6 text-sm text-muted-foreground">
+          Sign in with your email and password. First time? Pick a password
+          now — we&apos;ll save it for next time.
+        </p>
+        <form
+          action={async (formData: FormData) => {
+            "use server";
+            await signIn("credentials", {
+              email: formData.get("email"),
+              password: formData.get("password"),
+              redirectTo: "/",
+            });
+          }}
+          className="space-y-4"
+        >
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="you@example.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              minLength={8}
+              placeholder="••••••••"
+            />
+          </div>
+          <Button type="submit" className="w-full">
+            Sign in
+          </Button>
+        </form>
       </div>
     </div>
   );
