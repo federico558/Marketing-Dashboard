@@ -184,7 +184,7 @@ async function fetchPostsForOrganization(
       input: {
         organizationId,
         filter: { status: ["sent"] },
-        sort: [{ field: "dueAt", direction: "DESC" }],
+        sort: [{ field: "dueAt", direction: "desc" }],
       },
       first: 50,
       after: cursor,
@@ -262,7 +262,7 @@ export async function bufferDebug(
         input: {
           organizationId: orgIds[0],
           filter: { status: ["sent"] },
-          sort: [{ field: "dueAt", direction: "DESC" }],
+          sort: [{ field: "dueAt", direction: "desc" }],
         },
         first: 10,
         after: null,
