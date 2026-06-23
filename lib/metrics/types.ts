@@ -46,10 +46,15 @@ export interface WebsiteMetrics {
 
 export interface OutreachChannelStats {
   sent: number;
+  sentChange: number | null;
   opens: number;
+  opensChange: number | null;
   replies: number;
+  repliesChange: number | null;
   openRate: number;
+  openRateChange: number | null;
   replyRate: number;
+  replyRateChange: number | null;
   connected: boolean;
 }
 
@@ -114,6 +119,16 @@ export interface SocialMetrics {
   channels: SocialChannelStats[];
   topPosts: SocialTopPost[];
   trend: TrendPoint[];
+  totals: {
+    posts: number;
+    postsChange: number | null;
+    impressions: number;
+    impressionsChange: number | null;
+    reach: number;
+    reachChange: number | null;
+    engagement: number;
+    engagementChange: number | null;
+  };
 }
 
 export interface ExecutiveSummary {
