@@ -56,6 +56,11 @@ async function listOrganizations(apiKey: string): Promise<string[]> {
   return (data.account?.organizations ?? []).map((o) => o.id);
 }
 
+interface PostMetric {
+  name?: string;
+  value?: number | string | null;
+}
+
 interface PostNode {
   id: string;
   text?: string | null;
@@ -68,7 +73,7 @@ interface PostNode {
     name?: string;
     displayName?: string;
   };
-  metrics?: Record<string, number | null | undefined>;
+  metrics?: PostMetric[];
 }
 
 interface PostsResponse {
@@ -90,7 +95,7 @@ const POSTS_QUERY = `
           sentAt
           channelId
           channel { id service name displayName }
-          metrics
+          metrics { name value }
         }
       }
       pageInfo { hasNextPage endCursor }
@@ -120,23 +125,22 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function pickMetric(
-  metrics: Record<string, unknown> | undefined,
-  keys: string[],
-): number {
+function metricByName(metrics: PostMetric[] | undefined, names: string[]): number {
   if (!metrics) return 0;
-  for (const k of keys) {
-    if (k in metrics) return num(metrics[k]);
+  const lowered = names.map((n) => n.toLowerCase());
+  for (const m of metrics) {
+    if (!m.name) continue;
+    if (lowered.includes(m.name.toLowerCase())) return num(m.value);
   }
   return 0;
 }
 
 function normalizePost(node: PostNode): BufferPost {
-  const m = (node.metrics ?? {}) as Record<string, unknown>;
-  const likes = pickMetric(m, ["likes", "likeCount", "reactions"]);
-  const comments = pickMetric(m, ["comments", "commentCount", "replies"]);
-  const shares = pickMetric(m, ["shares", "shareCount", "reposts", "retweets"]);
-  const engagementFromBuffer = pickMetric(m, [
+  const m = node.metrics ?? [];
+  const likes = metricByName(m, ["likes", "likeCount", "reactions"]);
+  const comments = metricByName(m, ["comments", "commentCount", "replies"]);
+  const shares = metricByName(m, ["shares", "shareCount", "reposts", "retweets"]);
+  const engagementFromBuffer = metricByName(m, [
     "engagement",
     "engagements",
     "totalEngagement",
@@ -149,13 +153,13 @@ function normalizePost(node: PostNode): BufferPost {
     channelId: node.channel?.id ?? node.channelId ?? "",
     service: (node.channel?.service ?? "").toLowerCase(),
     channelName: node.channel?.displayName ?? node.channel?.name ?? "",
-    impressions: pickMetric(m, ["impressions", "impressionCount", "views"]),
-    reach: pickMetric(m, ["reach", "uniqueImpressions", "uniqueViews"]),
+    impressions: metricByName(m, ["impressions", "impressionCount", "views"]),
+    reach: metricByName(m, ["reach", "uniqueImpressions", "uniqueViews"]),
     engagement,
     likes,
     comments,
     shares,
-    clicks: pickMetric(m, ["clicks", "clickCount", "linkClicks"]),
+    clicks: metricByName(m, ["clicks", "clickCount", "linkClicks"]),
   };
 }
 
@@ -242,6 +246,15 @@ export async function bufferDebug(
   const orgIds = (account as AccountResponse | null)?.account?.organizations?.map(
     (o) => o.id,
   ) ?? [];
+  let postMetricSchema: unknown = null;
+  try {
+    postMetricSchema = await graphql(
+      apiKey,
+      `query { __type(name: "PostMetric") { name fields { name type { name kind ofType { name kind } } } } }`,
+    );
+  } catch (e) {
+    postMetricSchema = { error: e instanceof Error ? e.message : String(e) };
+  }
   let postsRaw: unknown = null;
   if (orgIds[0]) {
     try {
@@ -258,5 +271,10 @@ export async function bufferDebug(
       postsRaw = { error: e instanceof Error ? e.message : String(e) };
     }
   }
-  return { range: { from, to, fromMs, toMs }, account, postsRaw };
+  return {
+    range: { from, to, fromMs, toMs },
+    account,
+    postMetricSchema,
+    postsRaw,
+  };
 }
