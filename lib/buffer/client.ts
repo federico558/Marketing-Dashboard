@@ -1,14 +1,18 @@
 import type { Connection } from "@prisma/client";
 import { decrypt } from "@/lib/crypto";
 
-const ENDPOINT = "https://graphql.buffer.com";
+const ENDPOINT = "https://api.buffer.com";
 
 interface GraphQLResponse<T> {
   data?: T;
   errors?: Array<{ message: string }>;
 }
 
-async function graphql<T>(apiKey: string, query: string, variables?: Record<string, unknown>): Promise<T> {
+async function graphql<T>(
+  apiKey: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<T> {
   const res = await fetch(ENDPOINT, {
     method: "POST",
     headers: {
@@ -22,7 +26,9 @@ async function graphql<T>(apiKey: string, query: string, variables?: Record<stri
   }
   const json = (await res.json()) as GraphQLResponse<T>;
   if (json.errors?.length) {
-    throw new Error(`Buffer GraphQL errors: ${json.errors.map((e) => e.message).join("; ")}`);
+    throw new Error(
+      `Buffer GraphQL errors: ${json.errors.map((e) => e.message).join("; ")}`,
+    );
   }
   if (!json.data) {
     throw new Error("Buffer GraphQL returned no data");
@@ -31,75 +37,66 @@ async function graphql<T>(apiKey: string, query: string, variables?: Record<stri
 }
 
 export async function verifyBufferKey(apiKey: string): Promise<void> {
-  try {
-    await graphql<{ viewer?: { id?: string } }>(
-      apiKey,
-      "query { viewer { id } }",
-    );
-  } catch (e) {
-    throw new Error(`Buffer key invalid: ${e instanceof Error ? e.message : "unknown"}`);
-  }
+  await graphql(apiKey, "query { account { organizations { id } } }");
 }
 
-export interface BufferChannel {
+interface OrganizationNode {
   id: string;
-  service: string;
-  name: string;
+}
+
+interface AccountResponse {
+  account?: { organizations?: OrganizationNode[] };
+}
+
+async function listOrganizations(apiKey: string): Promise<string[]> {
+  const data = await graphql<AccountResponse>(
+    apiKey,
+    "query { account { organizations { id } } }",
+  );
+  return (data.account?.organizations ?? []).map((o) => o.id);
 }
 
 interface PostNode {
   id: string;
   text?: string | null;
+  dueAt?: string | null;
   sentAt?: string | null;
-  channel?: { id?: string; service?: string; name?: string };
-  metrics?: {
-    impressions?: number | null;
-    reach?: number | null;
-    engagement?: number | null;
-    likes?: number | null;
-    comments?: number | null;
-    shares?: number | null;
-    clicks?: number | null;
+  channelId?: string | null;
+  channel?: {
+    id?: string;
+    service?: string;
+    name?: string;
+    displayName?: string;
+  };
+  metrics?: Record<string, number | null | undefined>;
+}
+
+interface PostsResponse {
+  posts?: {
+    edges?: Array<{ cursor?: string; node?: PostNode }>;
+    pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
   };
 }
 
 const POSTS_QUERY = `
-  query Posts($first: Int!, $after: String, $start: DateTime, $end: DateTime) {
-    viewer {
-      id
-      posts(first: $first, after: $after, sentAfter: $start, sentBefore: $end) {
-        edges {
-          cursor
-          node {
-            id
-            text
-            sentAt
-            channel { id service name }
-            metrics {
-              impressions
-              reach
-              engagement
-              likes
-              comments
-              shares
-              clicks
-            }
-          }
+  query Posts($input: PostsInput!, $first: Int!, $after: String) {
+    posts(input: $input, first: $first, after: $after) {
+      edges {
+        cursor
+        node {
+          id
+          text
+          dueAt
+          sentAt
+          channelId
+          channel { id service name displayName }
+          metrics
         }
-        pageInfo { hasNextPage endCursor }
       }
+      pageInfo { hasNextPage endCursor }
     }
   }
 `;
-
-interface PostsResponse {
-  viewer?: {
-    posts?: {
-      edges?: Array<{ cursor?: string; node?: PostNode }>;
-      pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
-    };
-  };
-}
 
 export interface BufferPost {
   id: string;
@@ -123,32 +120,90 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function pickMetric(
+  metrics: Record<string, unknown> | undefined,
+  keys: string[],
+): number {
+  if (!metrics) return 0;
+  for (const k of keys) {
+    if (k in metrics) return num(metrics[k]);
+  }
+  return 0;
+}
+
 function normalizePost(node: PostNode): BufferPost {
-  const m = node.metrics ?? {};
-  const likes = num(m.likes);
-  const comments = num(m.comments);
-  const shares = num(m.shares);
-  const engagement = num(m.engagement) || likes + comments + shares;
+  const m = (node.metrics ?? {}) as Record<string, unknown>;
+  const likes = pickMetric(m, ["likes", "likeCount", "reactions"]);
+  const comments = pickMetric(m, ["comments", "commentCount", "replies"]);
+  const shares = pickMetric(m, ["shares", "shareCount", "reposts", "retweets"]);
+  const engagementFromBuffer = pickMetric(m, [
+    "engagement",
+    "engagements",
+    "totalEngagement",
+  ]);
+  const engagement = engagementFromBuffer || likes + comments + shares;
   return {
     id: node.id,
     text: (node.text ?? "").trim(),
-    sentAt: node.sentAt ?? "",
-    channelId: node.channel?.id ?? "",
+    sentAt: node.sentAt ?? node.dueAt ?? "",
+    channelId: node.channel?.id ?? node.channelId ?? "",
     service: (node.channel?.service ?? "").toLowerCase(),
-    channelName: node.channel?.name ?? "",
-    impressions: num(m.impressions),
-    reach: num(m.reach),
+    channelName: node.channel?.displayName ?? node.channel?.name ?? "",
+    impressions: pickMetric(m, ["impressions", "impressionCount", "views"]),
+    reach: pickMetric(m, ["reach", "uniqueImpressions", "uniqueViews"]),
     engagement,
     likes,
     comments,
     shares,
-    clicks: num(m.clicks),
+    clicks: pickMetric(m, ["clicks", "clickCount", "linkClicks"]),
   };
 }
 
-function isoOrPassthrough(d: string): string {
-  if (d.length === 10) return `${d}T00:00:00Z`;
-  return d;
+function inRange(sentAt: string, fromMs: number, toMs: number): boolean {
+  if (!sentAt) return false;
+  const t = new Date(sentAt).getTime();
+  if (!Number.isFinite(t)) return false;
+  return t >= fromMs && t <= toMs;
+}
+
+async function fetchPostsForOrganization(
+  apiKey: string,
+  organizationId: string,
+  fromMs: number,
+  toMs: number,
+): Promise<BufferPost[]> {
+  const out: BufferPost[] = [];
+  let cursor: string | null = null;
+  const MAX_PAGES = 20;
+  for (let i = 0; i < MAX_PAGES; i += 1) {
+    const data: PostsResponse = await graphql(apiKey, POSTS_QUERY, {
+      input: {
+        organizationId,
+        filter: { status: ["sent"] },
+        sort: [{ field: "dueAt", direction: "DESC" }],
+      },
+      first: 50,
+      after: cursor,
+    });
+    const edges = data.posts?.edges ?? [];
+    let allTooOld = edges.length > 0;
+    for (const edge of edges) {
+      if (!edge.node) continue;
+      const post = normalizePost(edge.node);
+      if (post.sentAt) {
+        const t = new Date(post.sentAt).getTime();
+        if (Number.isFinite(t) && t >= fromMs) allTooOld = false;
+      } else {
+        allTooOld = false;
+      }
+      if (inRange(post.sentAt, fromMs, toMs)) out.push(post);
+    }
+    if (allTooOld) break;
+    const pageInfo = data.posts?.pageInfo;
+    if (!pageInfo?.hasNextPage || !pageInfo.endCursor) break;
+    cursor = pageInfo.endCursor;
+  }
+  return out;
 }
 
 export async function fetchBufferPosts(
@@ -158,27 +213,14 @@ export async function fetchBufferPosts(
 ): Promise<BufferPost[]> {
   if (!conn.apiKeyEnc) throw new Error("Buffer connection missing API key");
   const apiKey = decrypt(conn.apiKeyEnc);
-  const start = isoOrPassthrough(from);
-  const end = isoOrPassthrough(`${to}T23:59:59Z`.slice(0, 19) + "Z");
-  const posts: BufferPost[] = [];
-  let cursor: string | null = null;
-  const MAX_PAGES = 20;
-  for (let i = 0; i < MAX_PAGES; i += 1) {
-    const data: PostsResponse = await graphql(apiKey, POSTS_QUERY, {
-      first: 50,
-      after: cursor,
-      start,
-      end,
-    });
-    const edges = data.viewer?.posts?.edges ?? [];
-    for (const edge of edges) {
-      if (edge.node) posts.push(normalizePost(edge.node));
-    }
-    const pageInfo = data.viewer?.posts?.pageInfo;
-    if (!pageInfo?.hasNextPage || !pageInfo.endCursor) break;
-    cursor = pageInfo.endCursor;
-  }
-  return posts;
+  const fromMs = new Date(`${from}T00:00:00Z`).getTime();
+  const toMs = new Date(`${to}T00:00:00Z`).getTime() + 86_400_000 - 1;
+  const orgIds = await listOrganizations(apiKey);
+  if (orgIds.length === 0) return [];
+  const perOrg = await Promise.all(
+    orgIds.map((id) => fetchPostsForOrganization(apiKey, id, fromMs, toMs)),
+  );
+  return perOrg.flat();
 }
 
 export async function bufferDebug(
@@ -186,26 +228,35 @@ export async function bufferDebug(
   from: string,
   to: string,
 ): Promise<unknown> {
-  const start = isoOrPassthrough(from);
-  const end = isoOrPassthrough(`${to}T23:59:59Z`.slice(0, 19) + "Z");
+  const fromMs = new Date(`${from}T00:00:00Z`).getTime();
+  const toMs = new Date(`${to}T00:00:00Z`).getTime() + 86_400_000 - 1;
+  let account: unknown = null;
   try {
-    const viewer = await graphql<{ viewer?: unknown }>(
+    account = await graphql(
       apiKey,
-      "query { viewer { id channels { id service name } } }",
+      "query { account { id organizations { id name } } }",
     );
-    let postsRaw: unknown = null;
+  } catch (e) {
+    account = { error: e instanceof Error ? e.message : String(e) };
+  }
+  const orgIds = (account as AccountResponse | null)?.account?.organizations?.map(
+    (o) => o.id,
+  ) ?? [];
+  let postsRaw: unknown = null;
+  if (orgIds[0]) {
     try {
       postsRaw = await graphql(apiKey, POSTS_QUERY, {
+        input: {
+          organizationId: orgIds[0],
+          filter: { status: ["sent"] },
+          sort: [{ field: "dueAt", direction: "DESC" }],
+        },
         first: 10,
         after: null,
-        start,
-        end,
       });
     } catch (e) {
       postsRaw = { error: e instanceof Error ? e.message : String(e) };
     }
-    return { range: { start, end }, viewer, postsRaw };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
   }
+  return { range: { from, to, fromMs, toMs }, account, postsRaw };
 }
