@@ -9,13 +9,13 @@ export function SocialSection({ data }: { data: SocialMetrics }) {
   return (
     <SectionCard
       title="Social"
-      description="Buffer — post performance across connected channels"
+      description="Buffer — posts sent in the last 30 days (lifetime engagement)"
       connected={data.connected}
     >
       {!data.connected ? (
         <EmptyHint label="Connect Buffer in Settings → Connections to populate this section." />
       ) : data.channels.length === 0 ? (
-        <EmptyHint label="No posts in this period across your connected Buffer channels." />
+        <EmptyHint label="No posts in the last 30 days across your connected Buffer channels." />
       ) : (
         <div className="space-y-6">
           {!data.metricsAvailable ? (
