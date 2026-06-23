@@ -1,6 +1,6 @@
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { SectionCard } from "@/components/dashboard/SectionCard";
-import { TrendChart } from "@/components/dashboard/TrendChart";
+import { TrendChartCard } from "@/components/dashboard/TrendChartCard";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils";
 import type { CrmMetrics } from "@/lib/metrics/types";
 
@@ -116,20 +116,13 @@ export function CrmSection({ data }: { data: CrmMetrics }) {
             </div>
           </div>
 
-          {data.trend.length > 0 ? (
-            <div>
-              <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                Deals won — trend
-              </div>
-              <TrendChart
-                data={data.trend}
-                series={[
-                  { key: "won", label: "Deals won", color: "#10b981" },
-                  { key: "value", label: "Value", color: "#3b82f6" },
-                ]}
-              />
-            </div>
-          ) : null}
+          <TrendChartCard
+            section="crm"
+            series={[
+              { key: "won", label: "Deals won", color: "#10b981" },
+              { key: "value", label: "Value", color: "#3b82f6" },
+            ]}
+          />
         </div>
       )}
     </SectionCard>

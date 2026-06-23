@@ -1,7 +1,7 @@
 import { BreakdownTable } from "@/components/dashboard/BreakdownTable";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { SectionCard } from "@/components/dashboard/SectionCard";
-import { TrendChart } from "@/components/dashboard/TrendChart";
+import { TrendChartCard } from "@/components/dashboard/TrendChartCard";
 import { formatNumber, formatPercent } from "@/lib/utils";
 import type { SocialMetrics } from "@/lib/metrics/types";
 
@@ -70,20 +70,13 @@ export function SocialSection({ data }: { data: SocialMetrics }) {
             </div>
           ) : null}
 
-          {data.trend.length > 0 ? (
-            <div>
-              <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                Trend
-              </div>
-              <TrendChart
-                data={data.trend}
-                series={[
-                  { key: "impressions", label: "Impressions", color: "#3b82f6" },
-                  { key: "engagement", label: "Engagement", color: "#f59e0b" },
-                ]}
-              />
-            </div>
-          ) : null}
+          <TrendChartCard
+            section="social"
+            series={[
+              { key: "impressions", label: "Impressions", color: "#3b82f6" },
+              { key: "engagement", label: "Engagement", color: "#f59e0b" },
+            ]}
+          />
         </div>
       )}
     </SectionCard>

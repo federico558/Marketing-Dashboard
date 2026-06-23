@@ -1,7 +1,7 @@
 import { BreakdownTable } from "@/components/dashboard/BreakdownTable";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { SectionCard } from "@/components/dashboard/SectionCard";
-import { TrendChart } from "@/components/dashboard/TrendChart";
+import { TrendChartCard } from "@/components/dashboard/TrendChartCard";
 import { formatNumber, formatPercent, formatDuration } from "@/lib/utils";
 import type { WebsiteMetrics } from "@/lib/metrics/types";
 
@@ -96,18 +96,13 @@ export function WebsiteSection({ data }: { data: WebsiteMetrics }) {
         </div>
 
         {anyConnected ? (
-          <div>
-            <div className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-              Trend
-            </div>
-            <TrendChart
-              data={data.trend}
-              series={[
-                { key: "sessions", label: "Sessions", color: "#3b82f6" },
-                { key: "clicks", label: "Search clicks", color: "#10b981" },
-              ]}
-            />
-          </div>
+          <TrendChartCard
+            section="website"
+            series={[
+              { key: "sessions", label: "Sessions", color: "#3b82f6" },
+              { key: "clicks", label: "Search clicks", color: "#10b981" },
+            ]}
+          />
         ) : null}
 
         {data.ga4.connected ? (
