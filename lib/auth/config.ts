@@ -17,6 +17,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   session: { strategy: "database" },
   callbacks: {
+    async signIn({ user }) {
+      const raw = process.env.AUTH_ALLOWED_EMAILS;
+      if (!raw) return true;
+      const allowed = raw
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      if (allowed.length === 0) return true;
+      return !!user.email && allowed.includes(user.email.toLowerCase());
+    },
     async session({ session, user }) {
       if (session.user) {
         session.user.id = user.id;

@@ -11,6 +11,8 @@ export default async function SignInPage({
 }) {
   const params = await searchParams;
   const check = params.check === "email";
+  const error = typeof params.error === "string" ? params.error : null;
+  const accessDenied = error === "AccessDenied";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
@@ -26,6 +28,15 @@ export default async function SignInPage({
           </div>
         ) : (
           <>
+            {accessDenied ? (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                This email isn&apos;t authorized to access the dashboard.
+              </div>
+            ) : error ? (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                Sign-in failed: {error}
+              </div>
+            ) : null}
             <p className="mb-6 text-sm text-muted-foreground">
               Sign in with your email — we&apos;ll send you a magic link.
             </p>
