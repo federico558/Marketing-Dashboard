@@ -13,7 +13,7 @@ export interface DateRange {
   preset: DateRangePreset;
 }
 
-export const DEFAULT_PRESET: DateRangePreset = "30d";
+export const DEFAULT_PRESET: DateRangePreset = "7d";
 
 export function rangeFromPreset(preset: DateRangePreset, now = new Date()): DateRange {
   const to = endOfToday();
