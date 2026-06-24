@@ -42,8 +42,50 @@ export function McpTokens({ endpoint, tokens }: Props) {
     startTransition(() => router.refresh());
   };
 
-  const sampleConfig = newToken
-    ? `{
+  const snippets = newToken
+    ? [
+        {
+          label: "Claude Desktop (Windows)",
+          help: "Paste into claude_desktop_config.json. Quit Claude Desktop from the tray and reopen.",
+          code: `{
+  "mcpServers": {
+    "marketing-dashboard": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "mcp-remote@latest",
+        "${endpoint}",
+        "--header",
+        "Authorization:Bearer ${newToken}"
+      ]
+    }
+  }
+}`,
+        },
+        {
+          label: "Claude Desktop (macOS)",
+          help: "Paste into claude_desktop_config.json (Settings → Developer → Edit Config). Quit Claude Desktop and reopen.",
+          code: `{
+  "mcpServers": {
+    "marketing-dashboard": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "${endpoint}",
+        "--header",
+        "Authorization:Bearer ${newToken}"
+      ]
+    }
+  }
+}`,
+        },
+        {
+          label: "Claude Code CLI / other HTTP-native MCP clients",
+          help: "For clients that speak Streamable HTTP directly. Claude Desktop does not — use one of the wrappers above.",
+          code: `{
   "mcpServers": {
     "marketing-dashboard": {
       "type": "http",
@@ -51,7 +93,9 @@ export function McpTokens({ endpoint, tokens }: Props) {
       "headers": { "Authorization": "Bearer ${newToken}" }
     }
   }
-}`
+}`,
+        },
+      ]
     : null;
 
   return (
@@ -100,14 +144,26 @@ export function McpTokens({ endpoint, tokens }: Props) {
               <code className="block break-all rounded bg-emerald-100 px-2 py-1 text-emerald-900">
                 {newToken}
               </code>
-              {sampleConfig ? (
+              {snippets ? (
                 <details>
                   <summary className="cursor-pointer text-xs text-emerald-900">
-                    Show Claude MCP config snippet
+                    Show Claude MCP config snippets
                   </summary>
-                  <pre className="mt-2 overflow-x-auto rounded bg-emerald-100 p-2 text-xs text-emerald-900">
-                    {sampleConfig}
-                  </pre>
+                  <div className="mt-2 space-y-3">
+                    {snippets.map((s) => (
+                      <div key={s.label} className="space-y-1">
+                        <div className="text-xs font-semibold text-emerald-900">
+                          {s.label}
+                        </div>
+                        <div className="text-xs text-emerald-900/80">
+                          {s.help}
+                        </div>
+                        <pre className="overflow-x-auto rounded bg-emerald-100 p-2 text-xs text-emerald-900">
+                          {s.code}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
                 </details>
               ) : null}
             </div>
